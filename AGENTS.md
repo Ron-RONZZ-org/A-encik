@@ -49,6 +49,11 @@ src/A_encik/
 ├── __init__.py           # Plugin exports
 ├── cli.py              # Typer app
 ├── service.py          # EncikService (extends CRUDService + core FTS5)
+├── semantika/          # Semantic link management
+│   ├── __init__.py     # Exports
+│   ├── config.py       # CSV group loading/writing, default definitions
+│   ├── wikidata.py     # Wikidata API client (search + metadata)
+│   └── search.py       # Condition parsing + entry matching
 └── data/
     └── storage.py     # SQLite + FTSConfig (uses A.data.search)
 ```
@@ -59,8 +64,28 @@ EncikService extends CRUDService with:
 - JSON serialization for complex columns
 - **Core FTS5** full-text search (inherited from CRUDService)
 - Title and UUID prefix lookups
+- Semantic entry search via ``search_semantika()``
 
 **Note:** FTS5 implementation was migrated to A-core in 2025. EncikService now uses `CRUDService` FTS5 methods instead of duplicating logic.
+
+## Semantika (Semantic Link Management)
+
+Three-layer system for structured knowledge:
+
+| Layer | Component | Description |
+|-------|-----------|-------------|
+| Catalog | ``semantika/config.py`` | CSV-based group files in ``~/.config/A/encik/semantika/*.csv`` defining semantic relationship types (23 built-in, extendable) |
+| Discovery | ``semantika/wikidata.py`` | Wikidata ``wbsearchentities``/``wbgetentities`` for property search and metadata lookup |
+| Search | ``semantika/search.py`` | Parse conditions (range, bool, text with ``*``) and match against entries' ``semantika`` JSON field — AND logic |
+
+### CLI Commands
+
+| Command | What it does |
+|---------|-------------|
+| ``encik semantika <group>`` | Show semantic links in a category (dynamically registered per CSV) |
+| ``encik semantika serci <query>`` | Search Wikidata + local CSVs for property definitions |
+| ``encik semantika aldoni <id> <group>`` | Add a Wikidata property to a CSV group with validation |
+| ``encik semantika-serci <conditions>`` | Filter entries by semantic conditions |
 
 ### JSON Fields
 
