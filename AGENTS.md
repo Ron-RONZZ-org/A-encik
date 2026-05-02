@@ -103,3 +103,6 @@ service.delete(uuid, soft=True)
 - Don't hardcode paths — use `A.core.paths`
 - Don't implement utilities that should be in core
 - **generi/semantika**: requires A-AI rewrite — implement as TODO stubs
+## Branch Convention
+
+All A-* repos use `main` as the primary branch. Use `main` for all development.

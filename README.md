@@ -66,3 +66,6 @@ A-encik is based on [autish encik](https://github.com/Ron-RONZZ-org/autish/).
 ## License
 
 GPL-3.0-only
+---
+
+**Branch:** Use `main` for all development.
