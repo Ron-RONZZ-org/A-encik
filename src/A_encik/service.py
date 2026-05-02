@@ -1,32 +1,30 @@
-"""Service layer for A-encik using CRUDService."""
+"""Service layer for A-encik using CRUDService with FTS5."""
 
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from A.core.service import CRUDService
 
-from A_encik.data.storage import get_db, row_to_dict
+from A_encik.data.storage import get_db, row_to_dict, ENCIK_FTS_CONFIG
 
 _encik_service: EncikService | None = None
 
 
 class EncikService(CRUDService):
     """Extended CRUDService for encik with JSON columns and FTS5.
-    
+
     Features:
     - JSON serialization for complex columns
-    - FTS5 full-text search indexing
+    - Core FTS5 full-text search indexing (inherited from CRUDService)
     - Title and UUID prefix lookups
     - Custom search methods
     """
 
     def __init__(self, db):
-        """Initialize EncikService."""
-        super().__init__(db, "encik")
+        """Initialize EncikService with FTS5 from core."""
+        super().__init__(db, "encik", fts_config=ENCIK_FTS_CONFIG)
 
     # JSON columns that need serialization
     _JSON_LIST_FIELDS: tuple[str, ...] = (
@@ -54,27 +52,16 @@ class EncikService(CRUDService):
         return row_to_dict(row)
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create with JSON serialization + FTS5 indexing."""
+        """Create with JSON serialization. FTS indexing handled by parent."""
         data = self._serialize(data)
         result = super().create(data)
-        # Index in FTS
-        self._index_fts(result["uuid"])
         return self._deserialize_row(result)
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Update with JSON serialization + FTS5 reindexing."""
+        """Update with JSON serialization. FTS reindexing handled by parent."""
         data = self._serialize(data)
         result = super().update(uuid, data)
-        # Re-index in FTS
-        self._reindex_fts(uuid)
         return self._deserialize_row(result)
-
-    def delete(self, uuid: str, soft: bool = True) -> None:
-        """Delete entry, removing from FTS if hard delete."""
-        if not soft:
-            # Remove from FTS first
-            self._remove_from_fts(uuid)
-        super().delete(uuid, soft)
 
     def get(self, uuid: str) -> dict[str, Any] | None:
         """Get entry with JSON deserialization."""
@@ -112,27 +99,14 @@ class EncikService(CRUDService):
     def search_fts(
         self,
         query: str,
-        limit: int = 100,
+        filters: dict[str, str] | None = None,
+        order_by: str = "relevance",
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Search entries using FTS5 full-text search."""
-        try:
-            # Escape special FTS characters and wrap query terms
-            escaped = query.replace('"', '""')
-            fts_query = f'"{escaped}"'
-            
-            rows = self.db.execute(
-                """
-                SELECT encik.* FROM encik
-                JOIN encik_fts ON encik.rowid = encik_fts.rowid
-                WHERE encik_fts MATCH ?
-                LIMIT ?
-                """,
-                (fts_query, limit),
-            )
-            return [self._deserialize_row(row) for row in rows]
-        except Exception:
-            # Fallback to LIKE search if FTS fails
-            return self.search("titolo", query, case_sensitive=False)[:limit]
+        """Search entries using core FTS5 full-text search."""
+        rows = super().search_fts(query, filters, order_by, limit, offset)
+        return [self._deserialize_row(row) for row in rows]
 
     def search_like(
         self,
@@ -150,38 +124,6 @@ class EncikService(CRUDService):
             (pattern, pattern, pattern, limit),
         )
         return [self._deserialize_row(row) for row in rows]
-
-    def _index_fts(self, uuid: str) -> None:
-        """Index a single entry in FTS5."""
-        entry = self.get(uuid)
-        if not entry:
-            return
-        
-        with self.db.transaction() as conn:
-            conn.execute(
-                """
-                INSERT INTO encik_fts (uuid, titolo, terminologio, difinio, difinoj, enhavo)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    entry["uuid"],
-                    entry.get("titolo", ""),
-                    json.dumps(entry.get("terminologio", {}), ensure_ascii=False),
-                    entry.get("difinio", ""),
-                    json.dumps(entry.get("difinoj", {}), ensure_ascii=False),
-                    entry.get("enhavo", ""),
-                ),
-            )
-
-    def _reindex_fts(self, uuid: str) -> None:
-        """Re-index a single entry in FTS5."""
-        self._remove_from_fts(uuid)
-        self._index_fts(uuid)
-
-    def _remove_from_fts(self, uuid: str) -> None:
-        """Remove an entry from FTS5."""
-        with self.db.transaction() as conn:
-            conn.execute("DELETE FROM encik_fts WHERE uuid = ?", (uuid,))
 
     def count(self) -> int:
         """Return total entry count."""

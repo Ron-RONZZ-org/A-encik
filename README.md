@@ -26,6 +26,23 @@ Requires **A-core** (automatically installed as dependency).
 ```bash
 A encik ls            # List all knowledge entries
 A encik vidi <uuid>  # View a knowledge entry
+A encik serci <query>  # Full-text search (FTS5)
+```
+
+## Search
+
+A-encik includes full-text search via SQLite FTS5:
+
+- **Full-text search**: Matches titles, definitions, and content
+- **French ligature support**: Search "cœur" finds "coeur" too
+- **Fuzzy matching**: Typo tolerance (install `rapidfuzz` for speed)
+
+```bash
+# Full-text search
+A encik serci "programming"
+
+# Fuzzy search (requires: pip install rapidfuzz)
+A encik serci "programmig" --fuzzy
 ```
 
 ## About
