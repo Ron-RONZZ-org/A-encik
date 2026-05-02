@@ -168,12 +168,33 @@ class TestGeneriCommand:
 class TestSemantikaCommand:
     """Tests for semantika command."""
     
-    def test_semantika_is_todo(self, runner):
-        """Test semantika shows TODO."""
+    def test_semantika_shows_help(self, runner):
+        """Test semantika shows help with groups."""
         result = runner.invoke(app, ["semantika"])
         
         assert result.exit_code == 0
-        assert "TODO" in result.output
+        assert "serci" in result.output
+        assert "aldoni" in result.output
+        assert "generala" in result.output
+    
+    def test_semantika_serci_requires_query(self, runner):
+        """Test semantika serci requires argument."""
+        result = runner.invoke(app, ["semantika", "serci"])
+        
+        assert result.exit_code == 2
+    
+    def test_semantika_serci_no_results(self, runner):
+        """Test semantika serci with no results."""
+        result = runner.invoke(app, ["semantika", "serci", "nonexistent99999"])
+        
+        assert result.exit_code == 0
+        assert "Neniuj rezultoj" in result.output or "No results" in result.output
+    
+    def test_semantika_aldoni_requires_args(self, runner):
+        """Test semantika aldoni requires arguments."""
+        result = runner.invoke(app, ["semantika", "aldoni"])
+        
+        assert result.exit_code == 2
 
 
 class TestHelpCommands:

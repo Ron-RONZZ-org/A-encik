@@ -130,6 +130,35 @@ class EncikService(CRUDService):
         row = self.db.execute_one("SELECT COUNT(*) AS cnt FROM encik")
         return row.get("cnt", 0) if row else 0
 
+    def search_semantika(
+        self,
+        conditions: list[dict[str, Any]],
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Search entries by semantic conditions.
+
+        Loads all entries and filters in Python (semantika is a JSON column).
+        For large datasets, consider adding a dedicated index.
+
+        Args:
+            conditions: Parsed conditions from
+                :func:`A_encik.semantika.search.parse_semantika_serci_conditions`.
+            limit: Max results.
+
+        Returns:
+            List of matching entries (deserialized).
+        """
+        from A_encik.semantika.search import entry_matches_semantika_conditions
+
+        rows = self.db.execute("SELECT * FROM encik LIMIT ?", (limit * 2,))
+        # We fetch a bit extra since filtering may reduce results
+        all_entries = [self._deserialize_row(row) for row in rows]
+        matching = [
+            e for e in all_entries
+            if entry_matches_semantika_conditions(e, conditions)
+        ]
+        return matching[:limit]
+
 
 def get_service() -> EncikService:
     """Get the singleton EncikService for encik table."""
