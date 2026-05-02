@@ -2,6 +2,17 @@
 
 A-encik - personal knowledge management microapp
 
+## Context
+
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-encik.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
 ## Install
 
 ```bash
