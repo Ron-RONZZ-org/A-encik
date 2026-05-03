@@ -320,7 +320,7 @@ def serci(
         False,
         "-t",
         "--teksto",
-        help=tr("Search full text (not just title)", "Search full text (not just title)", "Ser��i plenan tekston"),
+        help=tr("Search full text (not just title)", "Search full text (not just title)", "Serĉi plenan tekston"),
     ),
     limit: int = typer.Option(
         20,
@@ -328,25 +328,147 @@ def serci(
         "--limit",
         help=tr("Maximum results", "Maximum results", "Maksimumaj rezultoj"),
     ),
+    subklasoj: bool = typer.Option(
+        False,
+        "-s",
+        "--subklasoj",
+        help=tr("Include subclasses", "Include subclasses", "Inkluzivi subklasojn"),
+    ),
+    superklasoj: bool = typer.Option(
+        False,
+        "-S",
+        "--superklasoj",
+        help=tr("Include superclasses", "Include superclasses", "Inkluzivi superklasojn"),
+    ),
+    ligiloj: bool = typer.Option(
+        False,
+        "-L",
+        "--ligiloj",
+        help=tr("Include linked entries", "Include linked entries", "Inkluzivi ligitajn ensxtojn"),
+    ),
 ) -> None:
     """Search knowledge entries."""
     service = get_service()
-    
-    if teksto:
-        entries = service.search_fts(demando, limit=limit)
-    else:
-        entries = service.search_like(demando, limit=limit)
-    
-    if not entries:
+
+    # Resolve the root entry first
+    entry = service.get(demando)
+    if not entry:
+        entry = service.find_by_titolo(demando)
+    if not entry:
+        matches = service.find_by_uuid_prefix(demando)
+        if len(matches) == 1:
+            entry = matches[0]
+
+    if not entry:
+        # Fall back to text search
+        if teksto:
+            entries = service.search_fts(demando, limit=limit)
+        else:
+            entries = service.search_like(demando, limit=limit)
+
+        if not entries:
+            info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
+            return
+
+        for e in entries:
+            uuid = e.get("uuid", "")[:8]
+            titolo = e.get("titolo", "")
+            console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
+        info(tr(f"{len(entries)} rezultoj", f"{len(entries)} results", f"{len(entries)} resultats"))
+        return
+
+    # Graph-based search
+    results: list[dict] = []
+    seen_uuids: set = {entry.get("uuid")}
+
+    if subklasoj:
+        subclasses = service.get_subclasses(entry["uuid"])
+        for sc in subclasses:
+            if sc["entry"]["uuid"] not in seen_uuids:
+                results.append(sc["entry"])
+                seen_uuids.add(sc["entry"]["uuid"])
+
+    if superklasoj:
+        superclasses = service.get_superclasses(entry["uuid"])
+        for sc in superclasses:
+            if sc["entry"]["uuid"] not in seen_uuids:
+                results.append(sc["entry"])
+                seen_uuids.add(sc["entry"]["uuid"])
+
+    if ligiloj:
+        ligilo = entry.get("ligilo", [])
+        for link in ligilo:
+            link_uuid = link if isinstance(link, str) else link[0]
+            if link_uuid and link_uuid not in seen_uuids:
+                linked = service.get(link_uuid)
+                if linked:
+                    results.append(linked)
+                    seen_uuids.add(link_uuid)
+
+    # If no graph options, just show the entry
+    if not (subklasoj or superklasoj or ligiloj):
+        results = [entry]
+
+    if not results:
         info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
         return
-    
-    for entry in entries:
-        uuid = entry.get("uuid", "")[:8]
-        titolo = entry.get("titolo", "")
+
+    for e in results:
+        uuid = e.get("uuid", "")[:8]
+        titolo = e.get("titolo", "")
         console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
-    
-    info(tr(f"{len(entries)} rezultoj", f"{len(entries)} results", f"{len(entries)} resultats"))
+
+    info(tr(f"{len(results)} rezultoj", f"{len(results)} results", f"{len(results)} resultats"))
+
+
+@app.command("grafo")
+def grafo(
+    ref: str = typer.Argument(
+        ...,
+        help=tr("UUID or title", "UUID or title", "UUID au titolo"),
+    ),
+    profundeco: int = typer.Option(
+        3,
+        "-d",
+        "--depth",
+        help=tr("Maximum depth", "Maximum depth", "Maksimuma profundeco"),
+    ),
+) -> None:
+    """Show knowledge graph for an entry."""
+    service = get_service()
+
+    # Find entry
+    entry = service.get(ref)
+    if not entry:
+        entry = service.find_by_titolo(ref)
+    if not entry:
+        matches = service.find_by_uuid_prefix(ref)
+        if len(matches) == 1:
+            entry = matches[0]
+
+    if not entry:
+        error(tr(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
+        raise typer.Exit(1)
+
+    graph = service.get_linked_graph(entry["uuid"], max_depth=profundeco)
+
+    console.print(f"[bold]Grafo por:[/bold] {entry.get('titolo', entry['uuid'])}")
+    console.print()
+
+    if not graph["nodes"]:
+        info(tr("Neniuj ligiloj", "No links", "Aucun lien"))
+        return
+
+    console.print("[bold]Nodoj:[/bold]")
+    for node in graph["nodes"]:
+        indent = "  " * node.get("depth", 0)
+        console.print(f"{indent}[cyan]{node['uuid'][:8]}[/] {node.get('titolo', '')}")
+
+    if graph["edges"]:
+        console.print()
+        console.print("[bold]Konektoj:[/bold]")
+        for edge in graph["edges"]:
+            console.print(f"  {edge['type']}: {edge.get('to', '')[:8]}")
 
 
 @app.command("eksporti")
