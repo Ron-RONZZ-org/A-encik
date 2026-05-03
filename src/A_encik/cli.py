@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
 import typer
 
-from A import error, info
+from A import error, info, copy_to_clipboard
 from A.console import console, tr
 
 from A_encik.service import get_service
@@ -80,15 +81,27 @@ def vidi(
     ),
     html: bool = typer.Option(
         False,
-        "--html",
         "-H",
+        "--html",
         help=tr("Render as HTML", "Render as HTML", "Montri kiel HTML"),
     ),
     open_browser: bool = typer.Option(
         False,
-        "--open",
         "-o",
+        "--open",
         help=tr("Open in browser", "Open in browser", "Malfermi en retumilo"),
+    ),
+    kopii: bool = typer.Option(
+        False,
+        "-k",
+        "--kopii",
+        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+    ),
+    semantika_kopii: bool = typer.Option(
+        False,
+        "-sk",
+        "--semantika-kopii",
+        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
     ),
 ) -> None:
     """View a knowledge entry."""
@@ -161,6 +174,13 @@ def vidi(
     
     console.print(f"[bold cyan]Kreita:[/] {entry.get('kreita_je')}")
     console.print(f"[bold cyan]Modifita:[/] {entry.get('modifita_je')}")
+    
+    # Handle clipboard copy options
+    if kopii or semantika_kopii:
+        if kopii:
+            copy_to_clipboard(f"#{entry['uuid'][:8]}")
+        if semantika_kopii:
+            copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
 
 
 @app.command("aldoni")
@@ -172,6 +192,18 @@ def aldoni(
     superklaso: Optional[str] = typer.Option(None, "-s", "--superklaso", help=tr("Superclass UUIDs (JSON)", "Superclass UUIDs (JSON)", "Superklaso UUIDoj (JSON)")),
     ligilo: Optional[str] = typer.Option(None, "-l", "--ligilo", help=tr("Links (JSON)", "Links (JSON)", "Ligiloj (JSON)")),
     fonto: Optional[str] = typer.Option(None, "-f", "--fonto", help=tr("Sources (JSON)", "Sources (JSON)", "Fontoj (JSON)")),
+    kopii: bool = typer.Option(
+        False,
+        "-k",
+        "--kopii",
+        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+    ),
+    semantika_kopii: bool = typer.Option(
+        False,
+        "-sk",
+        "--semantika-kopii",
+        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
+    ),
 ) -> None:
     """Add a new knowledge entry."""
     import json
@@ -218,6 +250,13 @@ def aldoni(
     entry = service.create(data)
     info(tr(f"Aldonis {titolo}", f"Added {titolo}", f"Ajoute {titolo}"))
     console.print(f"[green]UUID:[/] {entry.get('uuid')}")
+    
+    # Handle clipboard copy options
+    if kopii or semantika_kopii:
+        if kopii:
+            copy_to_clipboard(f"#{entry['uuid'][:8]}")
+        if semantika_kopii:
+            copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
 
 
 @app.command("modifi")
@@ -229,6 +268,18 @@ def modifi(
     titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr("New title", "New title", "Nova titolo")),
     difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr("New definition", "New definition", "Nova difino")),
     enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr("New content", "New content", "Nova enhavo")),
+    kopii: bool = typer.Option(
+        False,
+        "-k",
+        "--kopii",
+        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+    ),
+    semantika_kopii: bool = typer.Option(
+        False,
+        "-sk",
+        "--semantika-kopii",
+        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
+    ),
 ) -> None:
     """Modify a knowledge entry."""
     service = get_service()
@@ -265,6 +316,13 @@ def modifi(
     
     updated = service.update(entry["uuid"], data)
     info(tr(f"Modifikis {updated['titolo']}", f"Modified {updated['titolo']}", f"Modifie {updated['titolo']}"))
+    
+    # Handle clipboard copy options
+    if kopii or semantika_kopii:
+        if kopii:
+            copy_to_clipboard(f"#{updated['uuid'][:8]}")
+        if semantika_kopii:
+            copy_to_clipboard(f"[{updated['titolo']}](#{updated['uuid'][:8]})")
 
 
 @app.command("forigi")
@@ -312,43 +370,95 @@ def forigi(
 
 @app.command("serci")
 def serci(
-    demando: str = typer.Argument(
-        ...,
-        help=tr("Search query", "Search query", "Serĉa demando"),
+    demando: str | None = typer.Argument(
+        None,
+        help=tr("Search query (title by default, full text with -t)", "Search query (title by default, full text with -t)", "Serĉa demando (titolo defaŭlte, plena teksto kun -t)"),
+    ),
+    lingvo: str | None = typer.Option(
+        None,
+        "-l",
+        "--lingvo",
+        help=tr("Preferred language codes (comma-separated). Example: -l fr,en", "Preferred language codes (comma-separated). Example: -l fr,en", "Preferataj lingvokodoj (komo-disigitaj). Ekz: -l fr,en"),
     ),
     teksto: bool = typer.Option(
         False,
         "-t",
         "--teksto",
-        help=tr("Search full text (not just title)", "Search full text (not just title)", "Serĉi plenan tekston"),
+        help=tr("Search full content (not just title)", "Search full content (not just title)", "Serĉi plenan enhavon (ne nur titolo)"),
     ),
-    limit: int = typer.Option(
-        20,
-        "-l",
-        "--limit",
-        help=tr("Maximum results", "Maximum results", "Maksimumaj rezultoj"),
-    ),
-    subklasoj: bool = typer.Option(
+    preciza: bool = typer.Option(
         False,
+        "-p",
+        "--preciza",
+        help=tr("Disable fuzzy fallback matching", "Disable fuzzy fallback matching", "Malŝalti malklaran rezervan kongruigon"),
+    ),
+    nova_unue: bool = typer.Option(
+        False,
+        "--nova-unue",
+        help=tr("Newest results first", "Newest results first", "Plej novaj rezultoj unue"),
+    ),
+    malnova_unue: bool = typer.Option(
+        False,
+        "--malnova-unue",
+        help=tr("Oldest results first", "Oldest results first", "Plej malnovaj rezultoj unue"),
+    ),
+    subklasoj: str | None = typer.Option(
+        None,
         "-s",
         "--subklasoj",
-        help=tr("Include subclasses", "Include subclasses", "Inkluzivi subklasojn"),
+        help=tr("Search subclasses of term (title or UUID)", "Search subclasses of term (title or UUID)", "Serĉi subklasojn de termino (titolo aŭ UUID)"),
     ),
-    superklasoj: bool = typer.Option(
-        False,
+    superklasoj: str | None = typer.Option(
+        None,
         "-S",
         "--superklasoj",
-        help=tr("Include superclasses", "Include superclasses", "Inkluzivi superklasojn"),
+        help=tr("Search superclasses of term (title or UUID)", "Search superclasses of term (title or UUID)", "Serĉi superklasojn de termino (titolo aŭ UUID)"),
     ),
-    ligiloj: bool = typer.Option(
-        False,
+    limo: int = typer.Option(
+        10,
         "-L",
-        "--ligiloj",
-        help=tr("Include linked entries", "Include linked entries", "Inkluzivi ligitajn ensxtojn"),
+        "--limo",
+        help=tr("Max results (default 10)", "Max results (default 10)", "Maksimumaj rezultoj (defaŭlte 10)"),
+    ),
+    html: bool = typer.Option(
+        False,
+        "-H",
+        "--html",
+        help=tr("Display results as semantic web diagram in browser", "Display results as semantic web diagram in browser", "Montri kiel semantikan retan diagramon en retumilo"),
+    ),
+    kopii: bool = typer.Option(
+        False,
+        "-k",
+        "--kopii",
+        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+    ),
+    semantika_kopii: bool = typer.Option(
+        False,
+        "-sk",
+        "--semantika-kopii",
+        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
     ),
 ) -> None:
     """Search knowledge entries."""
     service = get_service()
+    
+    # Handle clipboard validation
+    if kopii and semantika_kopii:
+        error(tr("Use only one of --kopii or --semantika-kopii", "Use only one of --kopii or --semantika-kopii", "Uzu nur unu el --kopii aŭ --semantika-kopii"))
+        raise typer.Exit(1)
+    
+    # No query - list all up to limo
+    if demando is None:
+        entries = service.list(order_by="kreita_je", desc=True, limit=limo)
+        if not entries:
+            info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
+            return
+        for e in entries:
+            uuid = e.get("uuid", "")[:8]
+            titolo = e.get("titolo", "")
+            console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
+        info(tr(f"{len(entries)} rezultoj", f"{len(entries)} results", f"{len(entries)} resultats"))
+        return
 
     # Resolve the root entry first
     entry = service.get(demando)
@@ -362,13 +472,21 @@ def serci(
     if not entry:
         # Fall back to text search
         if teksto:
-            entries = service.search_fts(demando, limit=limit)
+            entries = service.search_fts(demando, limit=limo)
         else:
-            entries = service.search_like(demando, limit=limit)
+            entries = service.search_like(demando, limit=limo)
 
         if not entries:
             info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
             return
+
+        # Handle clipboard copy with search results
+        if kopii or semantika_kopii and entries:
+            target = entries[0]
+            if kopii:
+                copy_to_clipboard(f"#{target['uuid'][:8]}")
+            if semantika_kopii:
+                copy_to_clipboard(f"[{target['titolo']}](#{target['uuid'][:8]})")
 
         for e in entries:
             uuid = e.get("uuid", "")[:8]
@@ -395,23 +513,21 @@ def serci(
                 results.append(sc["entry"])
                 seen_uuids.add(sc["entry"]["uuid"])
 
-    if ligiloj:
-        ligilo = entry.get("ligilo", [])
-        for link in ligilo:
-            link_uuid = link if isinstance(link, str) else link[0]
-            if link_uuid and link_uuid not in seen_uuids:
-                linked = service.get(link_uuid)
-                if linked:
-                    results.append(linked)
-                    seen_uuids.add(link_uuid)
-
     # If no graph options, just show the entry
-    if not (subklasoj or superklasoj or ligiloj):
+    if not (subklasoj or superklasoj):
         results = [entry]
 
     if not results:
         info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
         return
+
+    # Handle clipboard copy with results
+    if kopii or semantika_kopii:
+        target = results[0]
+        if kopii:
+            copy_to_clipboard(f"#{target['uuid'][:8]}")
+        if semantika_kopii:
+            copy_to_clipboard(f"[{target['titolo']}](#{target['uuid'][:8]})")
 
     for e in results:
         uuid = e.get("uuid", "")[:8]
