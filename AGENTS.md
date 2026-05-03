@@ -128,6 +128,30 @@ service.delete(uuid, soft=True)
 - Don't hardcode paths — use `A.core.paths`
 - Don't implement utilities that should be in core
 - **generi/semantika**: requires A-AI rewrite — implement as TODO stubs
-## Branch Convention
 
+## Migration from autish
+
+A-encik supports migration from autish encik.db:
+
+| Legacy | Target | Description |
+|--------|--------|-------------|
+| encik.db → encik | A-encik → encik | Knowledge (731 entries) |
+
+**CLI:**
+```bash
+A migri           # Run migrations
+```
+
+**Programmatic:**
+```python
+from A_encik.data.migrate_from_autish import migrate
+result = migrate()
+```
+
+Features:
+- JSON field conversions (terminologio, difinoj, superklaso, ligilo, fonto, citajo, datumo, semantika)
+- Preserves UUIDs and timestamps
+- Idempotent
+
+## Branch Convention
 All A-* repos use `main` as the primary branch. Use `main` for all development.

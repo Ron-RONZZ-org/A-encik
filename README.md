@@ -59,6 +59,18 @@ A-encik is a plugin for the [A](https://github.com/Ron-RONZZ-org/A-core/) framew
 
 See the [A-core documentation](https://github.com/Ron-RONZZ-org/A-core/) for more on the framework.
 
+## Migration from autish
+
+A-encik supports migration from autish:
+
+```bash
+A migri           # Run migrations (imports knowledge entries)
+```
+
+| Legacy | Target | Description |
+|--------|--------|-------------|
+| encik.db → encik | A-encik → encik | Knowledge (731 entries) |
+
 ## History
 
 A-encik is based on [autish encik](https://github.com/Ron-RONZZ-org/autish/).
