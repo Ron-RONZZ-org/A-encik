@@ -78,28 +78,43 @@ def vidi(
         "--lingvo",
         help=tr("Language code", "Language code", "Kodo de lingvo"),
     ),
+    html: bool = typer.Option(
+        False,
+        "--html",
+        "-H",
+        help=tr("Render as HTML", "Render as HTML", "Montri kiel HTML"),
+    ),
+    open_browser: bool = typer.Option(
+        False,
+        "--open",
+        "-o",
+        help=tr("Open in browser", "Open in browser", "Malfermi en retumilo"),
+    ),
 ) -> None:
     """View a knowledge entry."""
     service = get_service()
-    
+
     # Try UUID first
     entry = service.get(ref)
-    
+
     # Try title if not found
     if not entry:
         entry = service.find_by_titolo(ref)
-    
+
     # Try UUID prefix if not found
     if not entry:
         matches = service.find_by_uuid_prefix(ref)
         if len(matches) == 1:
             entry = matches[0]
-        elif len(matches) > 1:
-            console.print("[yellow]Multiple matches:[/yellow]")
-            for m in matches:
-                console.print(f"  [cyan]{m['uuid'][:8]}[/] {m.get('titolo', '')}")
-            return
-    
+
+    # HTML rendering
+    if html or open_browser:
+        from A_encik.display import preview_entry
+        preview_entry(entry, open_browser=open_browser)
+        if open_browser:
+            info(tr("Malfermis en retumilo", "Opened in browser", "Ouvert dans le navigateur"))
+        return
+
     if not entry:
         error(tr(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
         raise typer.Exit(1)
