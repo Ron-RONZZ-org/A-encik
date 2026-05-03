@@ -12,6 +12,7 @@ from rich.table import Table
 
 from A import error, info, copy_to_clipboard
 from A.console import console, tr
+from A.utils.interactive import select_candidate
 
 from A_encik.service import get_service
 from A_encik.display_helpers import (
@@ -508,19 +509,20 @@ def serci(
             return
 
         # Multiple results
-        print_candidates_table(entries, preferred_langs=preferred_search_langs)
-        info(tr(f"{len(entries)} rezultoj", f"{len(entries)} results", f"{len(entries)} resultats"))
-        raw = typer.prompt(
-            tr("Elektu numeron por vidi detalojn/kopii (aŭ Enter por preteriri)", "Select a number to view details/copy (or Enter to skip)"),
-            default="",
+        result = select_candidate(
+            entries,
+            columns=[
+                {"header": "UUID", "style": "dim", "width": 10},
+                {"header": "Titolo"},
+            ],
+            row_formatter=lambda e, i: [
+                e.get("uuid", "")[:8],
+                entry_locale_title(e, preferred_langs=preferred_search_langs),
+            ],
         )
-        if raw.strip():
-            try:
-                idx = int(raw.strip()) - 1
-                if 0 <= idx < len(entries):
-                    _copy_and_show(entries, idx)
-            except ValueError:
-                pass
+        if result is not None:
+            idx, _ = result
+            _copy_and_show(entries, idx)
         return
 
     # Graph-based search
@@ -554,19 +556,20 @@ def serci(
         _copy_and_show(results)
         return
 
-    print_candidates_table(results, preferred_langs=preferred_search_langs)
-    info(tr(f"{len(results)} rezultoj", f"{len(results)} results", f"{len(results)} resultats"))
-    raw = typer.prompt(
-        tr("Elektu numeron por vidi detalojn/kopii (aŭ Enter por preteriri)", "Select a number to view details/copy (or Enter to skip)"),
-        default="",
+    result = select_candidate(
+        results,
+        columns=[
+            {"header": "UUID", "style": "dim", "width": 10},
+            {"header": "Titolo"},
+        ],
+        row_formatter=lambda e, i: [
+            e.get("uuid", "")[:8],
+            entry_locale_title(e, preferred_langs=preferred_search_langs),
+        ],
     )
-    if raw.strip():
-        try:
-            idx = int(raw.strip()) - 1
-            if 0 <= idx < len(results):
-                _copy_and_show(results, idx)
-        except ValueError:
-            pass
+    if result is not None:
+        idx, _ = result
+        _copy_and_show(results, idx)
 
 
 @app.command("grafo")
