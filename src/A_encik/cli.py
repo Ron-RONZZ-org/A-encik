@@ -359,12 +359,18 @@ def eksporti(
         ...,
         help=tr("Output file", "Output file", "Eliga dosiero"),
     ),
+    formato: str = typer.Option(
+        "enc",
+        "--format",
+        "-f",
+        help=tr("Format: enc or json", "Format: enc or json", "Formato: enc aŭ json"),
+    ),
 ) -> None:
-    """Export a knowledge entry to JSON."""
+    """Export a knowledge entry."""
     import json
-    
+
     service = get_service()
-    
+
     # Find entry
     entry = service.get(ref)
     if not entry:
@@ -377,19 +383,58 @@ def eksporti(
             else:
                 error(tr("Uz pli specifan referencon", "Use a more specific reference", "Uz pli specifan referencon"))
                 raise typer.Exit(1)
-    
+
     if not entry:
         error(tr(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
         raise typer.Exit(1)
-    
-    # Export as JSON
+
     out_path = Path(celvojo).expanduser().resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(entry, f, ensure_ascii=False, indent=2)
-    
+
+    if formato == "enc":
+        from A_encik.enc_format import entry_to_enc
+        enc_text = entry_to_enc(entry)
+        out_path.write_text(enc_text, encoding="utf-8")
+    else:
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(entry, f, ensure_ascii=False, indent=2)
+
     info(tr(f"Eksportis {entry['titolo']} al {out_path}", f"Exported {entry['titolo']} to {out_path}", f"Exporte {entry['titolo']} vers {out_path}"))
+
+
+@app.command("importi")
+def importi(
+    fonto: str = typer.Argument(
+        ...,
+        help=tr("Input .enc file", "Input .enc file", "Eniga .enc dosiero"),
+    ),
+) -> None:
+    """Import a knowledge entry from .enc file."""
+    from A_encik.enc_format import parse_enc_file, validate_enc_entry
+
+    path = Path(fonto).expanduser()
+    if not path.exists():
+        error(tr(f"Dosiero {fonto} ne ekzistas", f"File {fonto} does not exist", f"Fichier {fonto} n'existe pas"))
+        raise typer.Exit(1)
+
+    try:
+        entry = parse_enc_file(path)
+    except ValueError as exc:
+        error(str(exc))
+        raise typer.Exit(1)
+
+    # Validate
+    errors = validate_enc_entry(entry)
+    if errors:
+        for e in errors:
+            error(f"Validiga eraro: {e}")
+        raise typer.Exit(1)
+
+    # Create entry
+    service = get_service()
+    created = service.create(entry)
+
+    info(tr(f"Importis {created['titolo']}", f"Imported {created['titolo']}", f"Importé {created['titolo']}"))
 
 
 @app.command("agordi")
