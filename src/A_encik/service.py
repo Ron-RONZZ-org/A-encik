@@ -75,9 +75,23 @@ class EncikService(CRUDService):
         order_by: str = "kreita_je",
         desc: bool = True,
         limit: int = None,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """List entries with JSON deserialization."""
-        rows = super().list(order_by=order_by, desc=desc, limit=limit)
+        """List entries with JSON deserialization and optional pagination.
+
+        Args:
+            order_by: Column to order by.
+            desc: Descending order if True.
+            limit: Max results.
+            offset: Number of rows to skip (for pagination).
+        """
+        order = "DESC" if desc else "ASC"
+        sql = f"SELECT * FROM {self.table} ORDER BY {order_by} {order}"
+        if limit:
+            sql += f" LIMIT {limit}"
+        if offset:
+            sql += f" OFFSET {offset}"
+        rows = self.db.execute(sql)
         return [self._deserialize_row(row) for row in rows]
 
     def find_by_titolo(self, titolo: str) -> dict[str, Any] | None:

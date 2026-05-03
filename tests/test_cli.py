@@ -49,12 +49,12 @@ class TestLsCommand:
         
         assert result.exit_code == 0
     
-    def test_ls_pagination_summary(self, runner):
-        """Test ls shows pagination summary."""
+    def test_ls_empty_db_message(self, runner):
+        """Test ls shows empty message when no entries."""
         result = runner.invoke(app, ["ls"])
         
         assert result.exit_code == 0
-        assert "Montras" in result.output or "Showing" in result.output
+        assert "Neniu" in result.output or "No entries" in result.output
     
     def test_ls_tag_args(self, runner):
         """Test ls runs with short flags."""
@@ -133,11 +133,12 @@ class TestForigiCommand:
 class TestSerciCommand:
     """Tests for serci command."""
     
-    def test_serci_requires_query(self, runner):
-        """Test serci requires query."""
+    def test_serci_no_query_shows_list(self, runner):
+        """Test serci without query shows listing (not error)."""
         result = runner.invoke(app, ["serci"])
         
-        assert result.exit_code == 2
+        # Without args, serci lists entries (matching legacy)
+        assert result.exit_code == 0
     
     def test_serci_no_results(self, runner):
         """Test serci with no results."""

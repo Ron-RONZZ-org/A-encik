@@ -7,11 +7,24 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from rich.panel import Panel
+from rich.table import Table
 
 from A import error, info, copy_to_clipboard
 from A.console import console, tr
 
 from A_encik.service import get_service
+from A_encik.display_helpers import (
+    preferred_lang,
+    entry_locale_title,
+    render_markdown_text,
+    has_non_cli_renderable_markup,
+    display_ligilo_items,
+    normalize_lingvo_codes,
+    print_candidates_table,
+    copy_entry_reference,
+    browser_fallback_hint,
+)
 
 app = typer.Typer(
     name="encik",
@@ -28,43 +41,70 @@ app = typer.Typer(
 
 @app.command("ls")
 def ls(
-    order_by: str = typer.Option(
-        "kreita_je",
-        "--order-by",
-        "-o",
-        help=tr("Order by field", "Order by field", "Champ de tri"),
-    ),
-    desc: bool = typer.Option(
-        True,
-        "--desc",
-        "-d",
-        help=tr("Descending order", "Descending order", "Ordre decroissant"),
-    ),
-    limit: Optional[int] = typer.Option(
-        10,
-        "--limit",
-        "-l",
-        help=tr("Limit results", "Limit results", "Limiter les resultats"),
-    ),
-    pagina: Optional[int] = typer.Option(
-        None,
-        "--pagho",
+    pagho: int = typer.Option(
+        1,
         "-p",
+        "--pagho",
         help=tr("Page number (1-indexed)", "Page number (1-indexed)", "Numero de paĝo"),
+        min=1,
+    ),
+    inversa: bool = typer.Option(
+        False,
+        "-i",
+        "--inversa",
+        help=tr("List from oldest instead of newest", "List from oldest instead of newest", "Listi de la plej malnova anstataŭ la plej nova"),
+    ),
+    per_pagho: int = typer.Option(
+        10,
+        "--per-pagho",
+        help=tr("Number of entries per page", "Number of entries per page", "Nombro de eniroj po paĝo"),
+        min=1,
+        max=100,
     ),
 ) -> None:
-    """List knowledge entries."""
+    """List encik entries with pagination.
+
+    By default, shows the newest 10 entries. Use -p to paginate and -i to reverse order.
+    """
     service = get_service()
-    entries = service.list(order_by=order_by, desc=desc, limit=limit)
-    
-    if not entries:
-        info(tr("Neniuj videblas", "No entries found", "Aucune entree"))
+    total = service.count()
+
+    if total == 0:
+        info(tr("Neniu eniro en la datumbazo.", "No entries in the database.", "Aucune entrée dans la base."))
         return
-    
-    for entry in entries:
-        uuid = entry.get("uuid", "")[:8]
-        titolo = entry.get("titolo", "")
-        console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
+
+    offset = (pagho - 1) * per_pagho
+    total_pages = (total + per_pagho - 1) // per_pagho
+
+    if offset >= total:
+        error(tr(
+            f"Paĝo {pagho} ne ekzistas (nur {total_pages} paĝo(j)).",
+            f"Page {pagho} does not exist (only {total_pages} page(s)).",
+        ))
+        raise typer.Exit(1)
+
+    entries = service.list(order_by="kreita_je", desc=not inversa, limit=per_pagho, offset=offset)
+
+    # Pagination summary
+    start = offset + 1
+    end = min(offset + per_pagho, total)
+    console.print(f"[dim]{tr('Montras', 'Showing')} {start}-{end} {tr('el', 'of')} {total} {tr('eniro(j)', 'entry(ies)')} | {tr('Paĝo', 'Page')} {pagho}/{total_pages}[/dim]")
+
+    # Table
+    table = Table(show_header=True, header_style="dim", border_style="dim", expand=False)
+    table.add_column("UUID", style="dim", width=10, no_wrap=True)
+    table.add_column(tr("Titolo", "Title"), min_width=30)
+    table.add_column(tr("Kreita", "Created"), width=12)
+    table.add_column(tr("Modifita", "Modified"), width=12)
+
+    for e in entries:
+        uid_short = e.get("uuid", "")[:8]
+        titolo = entry_locale_title(e)
+        kreita = (e.get("kreita_je") or "")[:10]
+        modifita = (e.get("modifita_je") or "")[:10]
+        table.add_row(uid_short, titolo, kreita, modifita)
+
+    console.print(table)
 
 
 @app.command("vidi")
@@ -78,6 +118,12 @@ def vidi(
         "-l",
         "--lingvo",
         help=tr("Language code", "Language code", "Kodo de lingvo"),
+    ),
+    cxio: bool = typer.Option(
+        False,
+        "-a",
+        "--cxio",
+        help=tr("Show all available languages and fields", "Show all available languages and fields", "Montri ĉiujn disponeblajn lingvojn kaj kampojn"),
     ),
     html: bool = typer.Option(
         False,
@@ -120,6 +166,10 @@ def vidi(
         if len(matches) == 1:
             entry = matches[0]
 
+    if not entry:
+        error(tr(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
+        raise typer.Exit(1)
+
     # HTML rendering
     if html or open_browser:
         from A_encik.display import preview_entry
@@ -128,59 +178,15 @@ def vidi(
             info(tr("Malfermis en retumilo", "Opened in browser", "Ouvert dans le navigateur"))
         return
 
-    if not entry:
-        error(tr(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
-        raise typer.Exit(1)
-    
-    # Display entry
-    console.print(f"[bold cyan]UUID:[/] {entry.get('uuid')}")
-    console.print(f"[bold cyan]Titolo:[/] {entry.get('titolo')}")
-    
-    if entry.get("difinio"):
-        console.print(f"[bold cyan]Difino:[/] {entry.get('difinio')}")
-    
-    terminologio = entry.get("terminologio", {})
-    if terminologio:
-        console.print("[bold cyan]Terminologio:[/]")
-        for lang, term in terminologio.items():
-            console.print(f"  {lang}: {term}")
-    
-    difinoj = entry.get("difinoj", {})
-    if difinoj:
-        console.print("[bold cyan]Difinoj:[/]")
-        for lang, defin in difinoj.items():
-            console.print(f"  {lang}: {defin}")
-    
-    if entry.get("enhavo"):
-        console.print(f"[bold cyan]Enhavo:[/] {entry.get('enhavo')}")
-    
-    superklaso = entry.get("superklaso", [])
-    if superklaso:
-        console.print("[bold cyan]Superklaso:[/]")
-        for sk in superklaso:
-            console.print(f"  - {sk}")
-    
-    ligilo = entry.get("ligilo", [])
-    if ligilo:
-        console.print("[bold cyan]Ligilo:[/]")
-        for link in ligilo:
-            console.print(f"  - {link}")
-    
-    fonto = entry.get("fonto", [])
-    if fonto:
-        console.print("[bold cyan]Fonto:[/]")
-        for f in fonto:
-            console.print(f"  - {f}")
-    
-    console.print(f"[bold cyan]Kreita:[/] {entry.get('kreita_je')}")
-    console.print(f"[bold cyan]Modifita:[/] {entry.get('modifita_je')}")
-    
-    # Handle clipboard copy options
+    # Handle clipboard before display
     if kopii or semantika_kopii:
-        if kopii:
-            copy_to_clipboard(f"#{entry['uuid'][:8]}")
-        if semantika_kopii:
-            copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
+        copy_entry_reference(entry, semantika=semantika_kopii)
+
+    # Display entry as Rich Panel
+    selected_lang = (lingvo or "").strip().lower() or preferred_lang(
+        entry.get("terminologio") or {}, entry.get("difinoj") or {}
+    )
+    display_entry_panel(entry, selected_lang=selected_lang, cxio=cxio)
 
 
 @app.command("aldoni")
@@ -447,16 +453,33 @@ def serci(
         error(tr("Use only one of --kopii or --semantika-kopii", "Use only one of --kopii or --semantika-kopii", "Uzu nur unu el --kopii aŭ --semantika-kopii"))
         raise typer.Exit(1)
     
+    # Parse preferred search languages
+    preferred_search_langs = normalize_lingvo_codes(lingvo)
+
+    def _preferred_search_lang(entry: dict) -> str:
+        """Get best language for a single entry."""
+        if preferred_search_langs:
+            for lang in preferred_search_langs:
+                if entry.get("terminologio", {}).get(lang) and entry.get("difinoj", {}).get(lang):
+                    return lang
+        return preferred_lang(entry.get("terminologio", {}), entry.get("difinoj", {}))
+
+    def _copy_and_show(candidates: list[dict], idx: int = 0) -> None:
+        """Copy reference and display a single entry."""
+        if not candidates or idx >= len(candidates):
+            return
+        target = candidates[idx]
+        if kopii or semantika_kopii:
+            copy_entry_reference(target, semantika=semantika_kopii)
+        display_entry_panel(target, selected_lang=_preferred_search_lang(target))
+
     # No query - list all up to limo
     if demando is None:
         entries = service.list(order_by="kreita_je", desc=True, limit=limo)
         if not entries:
             info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
             return
-        for e in entries:
-            uuid = e.get("uuid", "")[:8]
-            titolo = e.get("titolo", "")
-            console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
+        print_candidates_table(entries, preferred_langs=preferred_search_langs)
         info(tr(f"{len(entries)} rezultoj", f"{len(entries)} results", f"{len(entries)} resultats"))
         return
 
@@ -480,19 +503,24 @@ def serci(
             info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
             return
 
-        # Handle clipboard copy with search results
-        if kopii or semantika_kopii and entries:
-            target = entries[0]
-            if kopii:
-                copy_to_clipboard(f"#{target['uuid'][:8]}")
-            if semantika_kopii:
-                copy_to_clipboard(f"[{target['titolo']}](#{target['uuid'][:8]})")
+        if len(entries) == 1:
+            _copy_and_show(entries)
+            return
 
-        for e in entries:
-            uuid = e.get("uuid", "")[:8]
-            titolo = e.get("titolo", "")
-            console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
+        # Multiple results
+        print_candidates_table(entries, preferred_langs=preferred_search_langs)
         info(tr(f"{len(entries)} rezultoj", f"{len(entries)} results", f"{len(entries)} resultats"))
+        raw = typer.prompt(
+            tr("Elektu numeron por vidi detalojn/kopii (aŭ Enter por preteriri)", "Select a number to view details/copy (or Enter to skip)"),
+            default="",
+        )
+        if raw.strip():
+            try:
+                idx = int(raw.strip()) - 1
+                if 0 <= idx < len(entries):
+                    _copy_and_show(entries, idx)
+            except ValueError:
+                pass
         return
 
     # Graph-based search
@@ -515,26 +543,30 @@ def serci(
 
     # If no graph options, just show the entry
     if not (subklasoj or superklasoj):
-        results = [entry]
+        _copy_and_show([entry])
+        return
 
     if not results:
         info(tr("Neniuj rezultoj", "No results", "Aucun resultat"))
         return
 
-    # Handle clipboard copy with results
-    if kopii or semantika_kopii:
-        target = results[0]
-        if kopii:
-            copy_to_clipboard(f"#{target['uuid'][:8]}")
-        if semantika_kopii:
-            copy_to_clipboard(f"[{target['titolo']}](#{target['uuid'][:8]})")
+    if len(results) == 1:
+        _copy_and_show(results)
+        return
 
-    for e in results:
-        uuid = e.get("uuid", "")[:8]
-        titolo = e.get("titolo", "")
-        console.print(f"[cyan]{uuid}[/] [bold]{titolo}[/]")
-
+    print_candidates_table(results, preferred_langs=preferred_search_langs)
     info(tr(f"{len(results)} rezultoj", f"{len(results)} results", f"{len(results)} resultats"))
+    raw = typer.prompt(
+        tr("Elektu numeron por vidi detalojn/kopii (aŭ Enter por preteriri)", "Select a number to view details/copy (or Enter to skip)"),
+        default="",
+    )
+    if raw.strip():
+        try:
+            idx = int(raw.strip()) - 1
+            if 0 <= idx < len(results):
+                _copy_and_show(results, idx)
+        except ValueError:
+            pass
 
 
 @app.command("grafo")
