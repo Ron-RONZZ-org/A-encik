@@ -387,6 +387,102 @@ def agordi() -> None:
     console.print(f"  Language: {config.language}")
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Rubujo (Recycle Bin) commands
+# ──────────────────────────────────────────────────────────────────────────────
+
+rubujo_app = typer.Typer(name="rubujo", help=tr("Recycle bin", "Recycle bin", "Rubujo"))
+
+
+@rubujo_app.command("list")
+def rubujo_list(
+    limo: int = typer.Option(50, "--limo", "-n", help=tr("Max entries to show", "Max entries to show", "Maksimum da ensxtoj")),
+) -> None:
+    """List trashed entries."""
+    service = get_service()
+    entries = service.get_trash(limit=limo)
+
+    if not entries:
+        info(tr("Rubujo estas malplena", "Recycle bin is empty", "Rubujo estas malplena"))
+        return
+
+    console.print(f"[bold]{tr('Rubujo', 'Recycle bin', 'Rubujo')}[/bold]")
+    console.print(f"  {tr('Nb entries:', 'Nb entries:', 'Nombro da ensxtoj:')} {len(entries)}")
+    console.print()
+
+    for entry in entries:
+        title = entry.get("titolo", entry.get("uuid", ""))
+        deleted_at = entry.get("forigita_je", "")
+        console.print(f"  [dim]{deleted_at[:19]}[/dim]  {title}")
+
+
+@rubujo_app.command("restaur")
+def rubujo_restauri(
+    ref: str = typer.Argument(..., help=tr("UUID or title", "UUID or title", "UUID au titolo")),
+) -> None:
+    """Restore entry from recycle bin."""
+    service = get_service()
+
+    # Try to find in trash by UUID or title
+    entry = None
+    for trashed in service.get_trash(limit=1000):
+        if trashed.get("uuid") == ref or trashed.get("titolo") == ref:
+            entry = trashed
+            break
+
+    if not entry:
+        error(tr(f"Eniro {ref} ne trovitas en rubujo", f"Entry {ref} not found in trash", f"Ensxto {ref} ne trovita en rubujo"))
+        raise typer.Exit(1)
+
+    service.restore(entry["uuid"])
+    info(tr(f"Restaŭris {entry['titolo']}", f"Restored {entry['titolo']}", f"Restaŭris {entry['titolo']}"))
+
+
+@rubujo_app.command("malplenigi")
+def rubujo_malplenigi(
+    konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr("Confirm without prompt", "Confirm without prompt", "Konfirmi sen demande")),
+) -> None:
+    """Empty the recycle bin."""
+    if not konfirmi:
+        console.print(tr("Uz --jes por konfirmi", "Use --jes to confirm", "Uzu --jes por konfirmi"))
+        raise typer.Exit(1)
+
+    service = get_service()
+    count = service.empty_trash()
+    info(tr(f"Malplenigis rubujon ({count} ensxtoj)", f"Emptied trash ({count} entries)", f"Malplenigis rubujon ({count} ensxtoj)"))
+
+
+@rubujo_app.command("forigi")
+def rubujo_permanent_forigi(
+    ref: str = typer.Argument(..., help=tr("UUID or title", "UUID or title", "UUID au titolo")),
+    konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr("Confirm without prompt", "Confirm without prompt", "Konfirmi sen demande")),
+) -> None:
+    """Permanently delete entry from recycle bin."""
+    if not konfirmi:
+        console.print(tr("Uz --jes por konfirmi", "Use --jes to confirm", "Uzu --jes por konfirmi"))
+        raise typer.Exit(1)
+
+    service = get_service()
+
+    # Find in trash
+    entry = None
+    for trashed in service.get_trash(limit=1000):
+        if trashed.get("uuid") == ref or trashed.get("titolo") == ref:
+            entry = trashed
+            break
+
+    if not entry:
+        error(tr(f"Eniro {ref} ne trovitas en rubujo", f"Entry {ref} not found in trash", f"Ensxto {ref} ne trovita en rubujo"))
+        raise typer.Exit(1)
+
+    service.permanent_delete(entry["uuid"])
+    info(tr(f"Forigis {entry['titolo']} permanenta", f"Permanently deleted {entry['titolo']}", f"Forigis {entry['titolo']} permanente"))
+
+
+# Register rubujo as subcommand
+app.add_typer(rubujo_app, name="rubujo")
+
+
 # Phase 2 commands (TODO stubs)
 @app.command("generi")
 def generi() -> None:
