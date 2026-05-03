@@ -2,6 +2,47 @@
 
 This file extends [A-workspace](./workspace/AGENTS.md).
 
+## User Experience Consistency with autish-legacy
+
+**CRITICAL**: A-encik must maintain feature parity and command compatibility with autish-legacy (`autish/commands/encik.py`) for user experience continuity.
+
+### Command Compatibility Rule
+
+Before adding new CLI commands or changing existing ones:
+1. **Check autish-legacy** for the equivalent command
+2. **Match the command signature exactly** - same args, same options
+3. **Only add A-specific features** when autish-legacy doesn't have them
+
+### Command Mapping (autish-legacy → A)
+
+| autish-legacy | A-encik | Status |
+|--------------|---------|--------|
+| `agordi` | `agordi` | ✓ exact match required |
+| `aldoni` | `aldoni` | ✓ exact match required |
+| `modifi` | `modifi` | ✓ exact match required |
+| `vidi` | `vidi` | ✓ exact match required |
+| `eksporti` | `eksporti` | ✓ exact match required |
+| `generi` | `generi` | ✓ exact match required |
+| `semantika-serci` | `semantika-serci` | ✓ exact match required |
+| `serci` | `serci` | ✓ exact match required |
+| `ls` | `ls` | ✓ exact match required |
+| `forigi` | `forigi` | ✓ exact match required |
+| (none) | `grafo` | A-only bonus |
+| (none) | `repacigi` | A-only bonus |
+
+### Output Format
+
+- Match autish-legacy console output format exactly
+- Use same Rich styling conventions
+- Match table columns and widths
+
+### Data Paths
+
+- autish-legacy: `~/.local/share/autish/encik.db`
+- A: `~/.local/share/A/encik.db`
+
+Migration must handle path changes transparently.
+
 ## Module-Specific Additions
 
 ### Relationship to A-core
