@@ -471,6 +471,14 @@ def grafo(
             console.print(f"  {edge['type']}: {edge.get('to', '')[:8]}")
 
 
+@app.command("repacigi")
+def repacigi() -> None:
+    """Reconcile all bidirectional semantic links in the database."""
+    service = get_service()
+    count = service.reconcile_all_reverse_links()
+    info(tr(f"Repacigis {count} ligilojn", f"Reconciled {count} links", f"Reconcile {count} liens"))
+
+
 @app.command("eksporti")
 def eksporti(
     ref: str = typer.Argument(

@@ -396,6 +396,175 @@ class EncikService(CRUDService):
 
         return {"nodes": nodes, "edges": edges}
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Bidirectional Link Reconciliation
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # Mapping of semantic relations and their inverses
+    _REVERSE_MAP: dict[str, str] = {
+        "rdfs:subClassOf": "rdfs:hasSubClass",
+        "rdfs:hasSubClass": "rdfs:subClassOf",
+        "rdf:type": "rdf:hasInstance",
+        "rdf:hasInstance": "rdf:type",
+        "wdt:P361": "wdt:P527",  # part of -> has parts
+        "wdt:P527": "wdt:P361",  # has parts -> part of
+        "wdt:P26": "wdt:P26",    # spouse -> spouse (symmetric)
+    }
+
+    def _reverse_ligilo(self, tipo: str | None) -> str | None:
+        """Get the reverse relation type for a given semantic link type."""
+        if not tipo:
+            return None
+        return self._REVERSE_MAP.get(tipo)
+
+    def _sync_bidirectional_relations(
+        self,
+        entry: dict[str, Any],
+        previous_ligilo: list | None = None,
+    ) -> None:
+        """Sync bidirectional superklaso/ligilo relations.
+
+        When an entry has superklaso references, automatically add
+        reverse ligilo entries in the target entries.
+
+        Args:
+            entry: The entry being created/updated
+            previous_ligilo: Previous ligilo value (for updates)
+        """
+        superklaso = entry.get("superklaso", [])
+        if isinstance(superklaso, str):
+            superklaso = [superklaso]
+
+        # For each superclass, add reverse ligilo
+        for parent_uuid in superklaso:
+            if not parent_uuid:
+                continue
+
+            parent = self.get(parent_uuid)
+            if not parent:
+                continue
+
+            # Get current ligilo and add reverse
+            ligilo = parent.get("ligilo", [])
+            if isinstance(ligilo, str):
+                ligilo = [ligilo]
+
+            # Check if reverse already exists
+            reverse_entry = entry.get("uuid")
+            needs_add = True
+            for link in ligilo:
+                link_uuid = link if isinstance(link, str) else link[0]
+                if link_uuid == reverse_entry:
+                    needs_add = False
+                    break
+
+            if needs_add:
+                # Add reverse link as [uuid, "rdfs:hasSubClass"]
+                new_ligilo = ligilo + [[reverse_entry, "rdfs:hasSubClass"]]
+                self.update(parent_uuid, {"ligilo": new_ligilo})
+
+    def _remove_stale_reverse_links(
+        self,
+        uuid: str,
+        old_ligilo: list,
+    ) -> None:
+        """Remove reverse links from entries that linked to this one.
+
+        Args:
+            uuid: The deleted entry's UUID
+            old_ligilo: The ligilo list from before deletion
+        """
+        # Find entries that might have this uuid in their ligilo
+        all_entries = self.list()
+        for entry in all_entries:
+            ligilo = entry.get("ligilo", [])
+            if isinstance(ligilo, str):
+                ligilo = [ligilo]
+
+            modified = False
+            new_ligilo = []
+            for link in ligilo:
+                link_uuid = link if isinstance(link, str) else link[0]
+                if link_uuid != uuid:
+                    new_ligilo.append(link)
+                else:
+                    modified = True
+
+            if modified:
+                self.update(entry["uuid"], {"ligilo": new_ligilo})
+
+    def _post_create(
+        self,
+        data: dict[str, Any],
+        result: dict[str, Any],
+    ) -> None:
+        """Hook called after create - sync bidirectional links."""
+        self._sync_bidirectional_relations(result)
+
+    def _post_update(
+        self,
+        uuid: str,
+        old_data: dict[str, Any] | None,
+        new_data: dict[str, Any],
+    ) -> None:
+        """Hook called after update - sync bidirectional links."""
+        old_ligilo = (old_data or {}).get("ligilo", [])
+        self._sync_bidirectional_relations(new_data, previous_ligilo=old_ligilo)
+
+    def _post_delete(
+        self,
+        uuid: str,
+        data: dict[str, Any] | None,
+        soft: bool,
+    ) -> None:
+        """Hook called after delete - remove stale reverse links."""
+        if not soft and data:
+            old_ligilo = data.get("ligilo", [])
+            self._remove_stale_reverse_links(uuid, old_ligilo)
+
+    def reconcile_all_reverse_links(self) -> int:
+        """Manually reconcile all bidirectional links in the database.
+
+        Returns:
+            Number of links reconciled
+        """
+        count = 0
+        entries = self.list()
+
+        for entry in entries:
+            uuid = entry.get("uuid")
+            superklaso = entry.get("superklaso", [])
+            if isinstance(superklaso, str):
+                superklaso = [superklaso]
+
+            # Ensure reverse ligilo exists in all superclasses
+            for parent_uuid in superklaso:
+                if not parent_uuid:
+                    continue
+
+                parent = self.get(parent_uuid)
+                if not parent:
+                    continue
+
+                ligilo = parent.get("ligilo", [])
+                if isinstance(ligilo, str):
+                    ligilo = [ligilo]
+
+                # Add reverse if missing
+                needs_add = True
+                for link in ligilo:
+                    link_uuid = link if isinstance(link, str) else link[0]
+                    if link_uuid == uuid:
+                        needs_add = False
+                        break
+
+                if needs_add:
+                    new_ligilo = ligilo + [[uuid, "rdfs:hasSubClass"]]
+                    self.update(parent_uuid, {"ligilo": new_ligilo})
+                    count += 1
+
+        return count
+
 
 def get_service() -> EncikService:
     """Get the singleton EncikService for encik table."""
