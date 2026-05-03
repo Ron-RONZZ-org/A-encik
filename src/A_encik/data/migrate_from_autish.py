@@ -61,7 +61,7 @@ def migrate() -> dict:
                     uuid, titolo, difinio, terminologio, difinoj, enhavo,
                     superklaso, ligilo, fonto, citajo, datumo, semantika,
                     kreita_je, modifita_je
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     row["uuid"],
                     row["titolo"],
@@ -83,7 +83,10 @@ def migrate() -> dict:
             migrated += 1
             
         except Exception as e:
-            errors.append(f"{row.get('uuid', 'unknown')}: {e}")
+            try:
+                errors.append(f"{row['uuid']}: {e}")
+            except Exception:
+                errors.append(f"unknown: {e}")
     
     legacy.close()
     
