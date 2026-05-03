@@ -12,6 +12,14 @@ from typer.testing import CliRunner
 from A_encik.cli import app
 
 
+@pytest.fixture(autouse=True)
+def isolate_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Isolate database to tmp_path to prevent leaking test data."""
+    import A_encik.data.storage as storage_module
+    monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
+
+
 @pytest.fixture
 def runner():
     """Create CLI test runner."""
@@ -30,14 +38,27 @@ class TestLsCommand:
     
     def test_ls_empty(self, runner):
         """Test ls with no entries."""
-        result = runner.invoke(app, ["ls", "--limit", "1"])
+        result = runner.invoke(app, ["ls", "--per-pagho", "1"])
         
         # Should not error
         assert result.exit_code == 0
     
     def test_ls_with_limit(self, runner):
-        """Test ls respects limit."""
-        result = runner.invoke(app, ["ls", "--limit", "5"])
+        """Test ls respects per-page limit."""
+        result = runner.invoke(app, ["ls", "--per-pagho", "5"])
+        
+        assert result.exit_code == 0
+    
+    def test_ls_pagination_summary(self, runner):
+        """Test ls shows pagination summary."""
+        result = runner.invoke(app, ["ls"])
+        
+        assert result.exit_code == 0
+        assert "Montras" in result.output or "Showing" in result.output
+    
+    def test_ls_tag_args(self, runner):
+        """Test ls runs with short flags."""
+        result = runner.invoke(app, ["ls", "-p", "1"])
         
         assert result.exit_code == 0
 
