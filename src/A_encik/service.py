@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from A.core.service import CRUDService
+from A.core.linking import sync_links_for_entry, remove_entry_links
 
 from A_encik.data.storage import get_db, row_to_dict, ENCIK_FTS_CONFIG
 
@@ -20,6 +21,7 @@ class EncikService(CRUDService):
     - Core FTS5 full-text search indexing (inherited from CRUDService)
     - Title and UUID prefix lookups
     - Custom search methods
+    - Cross-module linking via ligiloj + A.core.linking
     """
 
     def __init__(self, db):
@@ -28,7 +30,7 @@ class EncikService(CRUDService):
 
     # JSON columns that need serialization
     _JSON_LIST_FIELDS: tuple[str, ...] = (
-        "superklaso", "ligilo", "fonto", "citajo", "semantika"
+        "superklaso", "ligilo", "fonto", "citajo", "semantika", "ligiloj"
     )
     _JSON_DICT_FIELDS: tuple[str, ...] = (
         "terminologio", "difinoj", "datumo"
@@ -55,20 +57,64 @@ class EncikService(CRUDService):
         """Create with JSON serialization. FTS indexing handled by parent."""
         data = self._serialize(data)
         result = super().create(data)
-        return self._deserialize_row(result)
+        entry = self._deserialize_row(result)
+        self._sync_links(entry)
+        return entry
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update with JSON serialization. FTS reindexing handled by parent."""
         data = self._serialize(data)
         result = super().update(uuid, data)
-        return self._deserialize_row(result)
+        entry = self._deserialize_row(result)
+        self._sync_links(entry)
+        return entry
+
+    def delete(self, uuid: str, soft: bool = True) -> None:
+        """Delete entry and clean up A.core.links."""
+        super().delete(uuid, soft=soft)
+        if not soft:
+            remove_entry_links("encik", uuid)
+
+    def _sync_links(self, entry: dict) -> None:
+        """Sync ligiloj + inline refs to A.core.links."""
+        uuid = entry["uuid"]
+        ligiloj = entry.get("ligiloj") or []
+        if isinstance(ligiloj, str):
+            try:
+                ligiloj = json.loads(ligiloj) if ligiloj.strip() else []
+            except (json.JSONDecodeError, TypeError):
+                ligiloj = []
+
+        # Collect text fields that may contain vt#/ec# references
+        text_fields: dict[str, Any] = {
+            "terminologio": entry.get("terminologio") or {},
+            "difinoj": entry.get("difinoj") or {},
+        }
+        if entry.get("enhavo"):
+            text_fields["enhavo"] = entry["enhavo"]
+        if entry.get("difinio"):
+            text_fields["difinio"] = entry["difinio"]
+
+        sync_links_for_entry(
+            uuid=uuid,
+            source_type="encik",
+            text_fields=text_fields,
+            explicit_links=ligiloj if isinstance(ligiloj, list) else [],
+        )
 
     def get(self, uuid: str) -> dict[str, Any] | None:
-        """Get entry with JSON deserialization."""
+        """Get entry with JSON deserialization and UUID prefix fallback."""
         row = super().get(uuid)
-        if not row:
-            return None
-        return self._deserialize_row(row)
+        if row:
+            return self._deserialize_row(row)
+        # Prefix match fallback
+        from A_encik.data.storage import get_db
+        db = get_db()
+        row = db.execute_one(
+            "SELECT * FROM encik WHERE uuid LIKE ?",
+            (f"{uuid}%",),
+        )
+        return self._deserialize_row(row) if row else None
 
     def list(
         self,
