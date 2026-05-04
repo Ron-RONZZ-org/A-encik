@@ -735,8 +735,8 @@ def agordi() -> None:
 rubujo_app = typer.Typer(name="rubujo", help=tr("Recycle bin", "Recycle bin", "Rubujo"))
 
 
-@rubujo_app.command("list")
-def rubujo_list(
+@rubujo_app.command("ls")
+def rubujo_ls(
     limo: int = typer.Option(50, "--limo", "-n", help=tr("Max entries to show", "Max entries to show", "Maksimum da ensxtoj")),
 ) -> None:
     """List trashed entries."""
