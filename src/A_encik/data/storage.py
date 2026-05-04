@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS encik (
     citajo      TEXT NOT NULL DEFAULT '[]',
     datumo      TEXT NOT NULL DEFAULT '{}',
     semantika   TEXT NOT NULL DEFAULT '[]',
+    ligiloj     TEXT NOT NULL DEFAULT '[]',
     kreita_je   TEXT NOT NULL,
     modifita_je TEXT NOT NULL
 );
@@ -102,13 +103,17 @@ def migrate_db(db: SQLiteDB) -> None:
         db.execute(
             "ALTER TABLE encik ADD COLUMN semantika TEXT NOT NULL DEFAULT '[]'"
         )
+    if "ligiloj" not in cols:
+        db.execute(
+            "ALTER TABLE encik ADD COLUMN ligiloj TEXT NOT NULL DEFAULT '[]'"
+        )
 
 
 def row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
     """Convert an encik table row to a plain dict, parsing JSON columns."""
     d = dict(row)
     # Parse list-type JSON columns
-    for field in ("superklaso", "ligilo", "fonto", "citajo", "source"):
+    for field in ("superklaso", "ligilo", "fonto", "citajo", "ligiloj", "source"):
         if isinstance(d.get(field), str):
             import json
             try:
