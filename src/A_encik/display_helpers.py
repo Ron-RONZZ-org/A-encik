@@ -172,9 +172,9 @@ def render_markdown_text(text: str) -> str:
     text = _MD_LINK.sub(_link_repl, text)
 
     # Convert markdown to Rich markup
-    text = _MD_BOLD.replace(r"\[bold\]\1\[/bold\]")
-    text = _MD_ITALIC.replace(r"\[italic\]\1\[/italic\]")
-    text = _MD_CODE.replace(r"\[code\]\1\[/code\]")
+    text = _MD_BOLD.sub(r"[bold]\1[/bold]", text)
+    text = _MD_ITALIC.sub(r"[italic]\1[/italic]", text)
+    text = _MD_CODE.sub(r"[code]\1[/code]", text)
 
     return text
 
