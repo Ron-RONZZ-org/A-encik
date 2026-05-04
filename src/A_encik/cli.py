@@ -25,6 +25,7 @@ from A_encik.display_helpers import (
     print_candidates_table,
     copy_entry_reference,
     browser_fallback_hint,
+    display_entry_panel,
 )
 
 app = typer.Typer(
