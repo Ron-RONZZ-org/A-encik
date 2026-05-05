@@ -190,6 +190,32 @@ def register_commands(app: typer.Typer) -> None:
         service = get_service()
 
         data: dict = {"titolo": titolo}
+
+        # Check for duplicate title (warn + prompt to replace, matching legacy)
+        existing = service.find_by_titolo(titolo)
+        if existing:
+            error(tr_multi(
+                f"Eniro '{titolo}' jam ekzistas (#{existing['uuid'][:8]}).",
+                f"Entry '{titolo}' already exists (#{existing['uuid'][:8]}).",
+                f"Entrée '{titolo}' existe déjà (#{existing['uuid'][:8]}).",
+            ))
+            answer = typer.prompt(
+                tr_multi("Ĉu anstataŭigi? (j/N)", "Replace? (j/N)", "Remplacer ? (j/N)"),
+                default="n",
+            )
+            if answer.strip().lower() not in {"j", "jes", "y", "yes"}:
+                info(tr_multi("Nuligita.", "Cancelled.", "Annulé."))
+                return
+            # Update existing entry with provided fields (partial update)
+            updated = service.update(existing["uuid"], data)
+            info(tr_multi(f"Anstataŭigis {titolo}", f"Replaced {titolo}", f"Remplacé {titolo}"))
+            console.print(f"[green]UUID:[/] {updated.get('uuid')}")
+            if kopii or semantika_kopii:
+                if kopii:
+                    copy_to_clipboard(f"#{updated['uuid'][:8]}")
+                if semantika_kopii:
+                    copy_to_clipboard(f"[{updated['titolo']}](#{updated['uuid'][:8]})")
+            return
         if difinio:
             data["difinio"] = difinio
         if enhavo:

@@ -58,8 +58,11 @@ SEMANTIKA_HELPO_TEKSTO = (
     "\n"
     "Subcommands:\n"
     "- encik semantika <grupo>          Show semantic links in category\n"
+    "- encik semantika ls               List all groups\n"
     "- encik semantika serci <query>    Search Wikidata for semantic links\n"
     "- encik semantika aldoni <id> <grupo>   Add semantic link to category\n"
+    "- encik semantika modifi <id> <grupo>   Modify a semantic link\n"
+    "- encik semantika forigi <id> <grupo>   Delete a semantic link\n"
     "\n"
     "Groups: generala, abstrakta, persono, geografio"
 )
@@ -80,7 +83,7 @@ _SEMANTIKA_DEFINOJ_MAP: dict[str, tuple[str, tuple[str, ...]]] = {
 # Config directory
 _SEMANTIKA_CONFIG_DIR: Path | None = None
 _SEMANTIKA_CONFIG_CACHE: dict[str, Any] = {"signature": None, "groups": None}
-_RESERVED_SUBCOMMANDS: frozenset[str] = frozenset({"serci", "aldoni"})
+_RESERVED_SUBCOMMANDS: frozenset[str] = frozenset({"ls", "serci", "aldoni", "modifi", "forigi"})
 _CSV_HEADERS: tuple[str, str, str] = ("LIGILO", "PRISKRIBO", "ALIAZOJ")
 _REGISTERED_GROUP_COMMANDS: set[str] = set()
 
