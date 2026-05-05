@@ -11,7 +11,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from A import error, info, copy_to_clipboard
-from A.console import console, tr
+from A.console import console
+from A import tr_multi
 from A.utils.interactive import select_candidate
 
 from A_encik.service import get_service
@@ -30,11 +31,7 @@ from A_encik.display_helpers import (
 
 app = typer.Typer(
     name="encik",
-    help=tr(
-        "Encik — persona sci-mastruma mikroapo.",
-        "Encik — personal knowledge management microapp.",
-        "Encik — microapplication de gestion de connaissances.",
-    ),
+    help=tr_multi("Encik — microapplication de gestion de connaissances.", "Encik — persona sci-mastruma mikroapo.", "Encik — persona sci-mastruma mikroapo."),
     no_args_is_help=False,
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
@@ -47,19 +44,19 @@ def ls(
         1,
         "-p",
         "--pagho",
-        help=tr("Page number (1-indexed)", "Page number (1-indexed)", "Numero de paĝo"),
+        help=tr_multi("Numero de paĝo", "Page number (1-indexed)", "Numéro de page (indexé à partir de 1)"),
         min=1,
     ),
     inversa: bool = typer.Option(
         False,
         "-i",
         "--inversa",
-        help=tr("List from oldest instead of newest", "List from oldest instead of newest", "Listi de la plej malnova anstataŭ la plej nova"),
+        help=tr_multi("Listi de la plej malnova anstataŭ la plej nova", "List from oldest instead of newest", "Lister du plus ancien au plus récent"),
     ),
     per_pagho: int = typer.Option(
         10,
         "--per-pagho",
-        help=tr("Number of entries per page", "Number of entries per page", "Nombro de eniroj po paĝo"),
+        help=tr_multi("Nombro de eniroj po paĝo", "Number of entries per page", "Nombre d'entrées par page"),
         min=1,
         max=100,
     ),
@@ -113,43 +110,43 @@ def ls(
 def vidi(
     ref: str = typer.Argument(
         ...,
-        help=tr("UUID or title", "UUID or title", "UUID aŭ titolo"),
+        help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
     ),
     lingvo: Optional[str] = typer.Option(
         None,
         "-l",
         "--lingvo",
-        help=tr("Language code", "Language code", "Kodo de lingvo"),
+        help=tr_multi("Kodo de lingvo", "Language code", "Code de langue"),
     ),
     cxio: bool = typer.Option(
         False,
         "-a",
         "--cxio",
-        help=tr("Show all available languages and fields", "Show all available languages and fields", "Montri ĉiujn disponeblajn lingvojn kaj kampojn"),
+        help=tr_multi("Montri ĉiujn disponeblajn lingvojn kaj kampojn", "Show all available languages and fields", "Afficher toutes les langues et champs disponibles"),
     ),
     html: bool = typer.Option(
         False,
         "-H",
         "--html",
-        help=tr("Render as HTML", "Render as HTML", "Montri kiel HTML"),
+        help=tr_multi("Montri kiel HTML", "Render as HTML", "Afficher en HTML"),
     ),
     open_browser: bool = typer.Option(
         False,
         "-o",
         "--open",
-        help=tr("Open in browser", "Open in browser", "Malfermi en retumilo"),
+        help=tr_multi("Malfermi en retumilo", "Open in browser", "Ouvrir dans le navigateur"),
     ),
     kopii: bool = typer.Option(
         False,
         "-k",
         "--kopii",
-        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+        help=tr_multi("Kopii #uuid al tondujo", "Copy #uuid to clipboard", "Copier #uuid dans le presse-papier"),
     ),
     semantika_kopii: bool = typer.Option(
         False,
         "-sk",
         "--semantika-kopii",
-        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
+        help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
     ),
 ) -> None:
     """View a knowledge entry."""
@@ -193,24 +190,24 @@ def vidi(
 
 @app.command("aldoni")
 def aldoni(
-    titolo: str = typer.Argument(..., help=tr("Title", "Title", "Titolo")),
-    difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr("Definition", "Definition", "Difino")),
-    enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr("Content", "Content", "Enhavo")),
-    terminologio: Optional[str] = typer.Option(None, "-t", "--terminologio", help=tr("Terminology (JSON)", "Terminology (JSON)", "Terminologio (JSON)")),
-    superklaso: Optional[str] = typer.Option(None, "-s", "--superklaso", help=tr("Superclass UUIDs (JSON)", "Superclass UUIDs (JSON)", "Superklaso UUIDoj (JSON)")),
-    ligilo: Optional[str] = typer.Option(None, "-l", "--ligilo", help=tr("Links (JSON)", "Links (JSON)", "Ligiloj (JSON)")),
-    fonto: Optional[str] = typer.Option(None, "-f", "--fonto", help=tr("Sources (JSON)", "Sources (JSON)", "Fontoj (JSON)")),
+    titolo: str = typer.Argument(..., help=tr_multi("Titolo", "Title", "Title")),
+    difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Difino", "Definition", "Definition")),
+    enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Enhavo", "Content", "Content")),
+    terminologio: Optional[str] = typer.Option(None, "-t", "--terminologio", help=tr_multi("Terminologio (JSON)", "Terminology (JSON)", "Terminologie (JSON)")),
+    superklaso: Optional[str] = typer.Option(None, "-s", "--superklaso", help=tr_multi("Superklaso UUIDoj (JSON)", "Superclass UUIDs (JSON)", "UUIDs de superclasse (JSON)")),
+    ligilo: Optional[str] = typer.Option(None, "-l", "--ligilo", help=tr_multi("Ligiloj (JSON)", "Links (JSON)", "Liens (JSON)")),
+    fonto: Optional[str] = typer.Option(None, "-f", "--fonto", help=tr_multi("Fontoj (JSON)", "Sources (JSON)", "Sources (JSON)")),
     kopii: bool = typer.Option(
         False,
         "-k",
         "--kopii",
-        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+        help=tr_multi("Kopii #uuid al tondujo", "Copy #uuid to clipboard", "Copier #uuid dans le presse-papier"),
     ),
     semantika_kopii: bool = typer.Option(
         False,
         "-sk",
         "--semantika-kopii",
-        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
+        help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
     ),
 ) -> None:
     """Add a new knowledge entry."""
@@ -271,22 +268,22 @@ def aldoni(
 def modifi(
     ref: str = typer.Argument(
         ...,
-        help=tr("UUID or title", "UUID or title", "UUID aŭ titolo"),
+        help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
     ),
-    titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr("New title", "New title", "Nova titolo")),
-    difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr("New definition", "New definition", "Nova difino")),
-    enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr("New content", "New content", "Nova enhavo")),
+    titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr_multi("Nova titolo", "New title", "New title")),
+    difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Nova difino", "New definition", "New definition")),
+    enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Nova enhavo", "New content", "New content")),
     kopii: bool = typer.Option(
         False,
         "-k",
         "--kopii",
-        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+        help=tr_multi("Kopii #uuid al tondujo", "Copy #uuid to clipboard", "Copier #uuid dans le presse-papier"),
     ),
     semantika_kopii: bool = typer.Option(
         False,
         "-sk",
         "--semantika-kopii",
-        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
+        help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
     ),
 ) -> None:
     """Modify a knowledge entry."""
@@ -337,13 +334,13 @@ def modifi(
 def forigi(
     ref: str = typer.Argument(
         ...,
-        help=tr("UUID or title", "UUID or title", "UUID aŭ titolo"),
+        help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
     ),
     hard: bool = typer.Option(
         False,
         "--hard",
         "-H",
-        help=tr("Permanent delete (no trash)", "Permanent delete (no trash)", "Suppression permanente"),
+        help=tr_multi("Suppression permanente", "Permanent delete (no trash)", "Suppression définitive (pas de corbeille)"),
     ),
 ) -> None:
     """Delete a knowledge entry."""
@@ -380,71 +377,71 @@ def forigi(
 def serci(
     demando: str | None = typer.Argument(
         None,
-        help=tr("Search query (title by default, full text with -t)", "Search query (title by default, full text with -t)", "Serĉa demando (titolo defaŭlte, plena teksto kun -t)"),
+        help=tr_multi("Serĉa demando (titolo defaŭlte, plena teksto kun -t)", "Search query (title by default, full text with -t)", "Requête de recherche (titre par défaut, texte intégral avec -t)"),
     ),
     lingvo: str | None = typer.Option(
         None,
         "-l",
         "--lingvo",
-        help=tr("Preferred language codes (comma-separated). Example: -l fr,en", "Preferred language codes (comma-separated). Example: -l fr,en", "Preferataj lingvokodoj (komo-disigitaj). Ekz: -l fr,en"),
+        help=tr_multi("Preferataj lingvokodoj (komo-disigitaj). Ekz: -l fr,en", "Preferred language codes (comma-separated). Example: -l fr,en", "Codes de langue préférés (séparés par des virgules). Exemple: -l fr,en"),
     ),
     teksto: bool = typer.Option(
         False,
         "-t",
         "--teksto",
-        help=tr("Search full content (not just title)", "Search full content (not just title)", "Serĉi plenan enhavon (ne nur titolo)"),
+        help=tr_multi("Serĉi plenan enhavon (ne nur titolo)", "Search full content (not just title)", "Rechercher dans tout le contenu (pas seulement le titre)"),
     ),
     preciza: bool = typer.Option(
         False,
         "-p",
         "--preciza",
-        help=tr("Disable fuzzy fallback matching", "Disable fuzzy fallback matching", "Malŝalti malklaran rezervan kongruigon"),
+        help=tr_multi("Malŝalti malklaran rezervan kongruigon", "Disable fuzzy fallback matching", "Disable fuzzy fallback matching"),
     ),
     nova_unue: bool = typer.Option(
         False,
         "--nova-unue",
-        help=tr("Newest results first", "Newest results first", "Plej novaj rezultoj unue"),
+        help=tr_multi("Plej novaj rezultoj unue", "Newest results first", "Newest results first"),
     ),
     malnova_unue: bool = typer.Option(
         False,
         "--malnova-unue",
-        help=tr("Oldest results first", "Oldest results first", "Plej malnovaj rezultoj unue"),
+        help=tr_multi("Plej malnovaj rezultoj unue", "Oldest results first", "Oldest results first"),
     ),
     subklasoj: str | None = typer.Option(
         None,
         "-s",
         "--subklasoj",
-        help=tr("Search subclasses of term (title or UUID)", "Search subclasses of term (title or UUID)", "Serĉi subklasojn de termino (titolo aŭ UUID)"),
+        help=tr_multi("Serĉi subklasojn de termino (titolo aŭ UUID)", "Search subclasses of term (title or UUID)", "Rechercher les sous-classes d'un terme (titre ou UUID)"),
     ),
     superklasoj: str | None = typer.Option(
         None,
         "-S",
         "--superklasoj",
-        help=tr("Search superclasses of term (title or UUID)", "Search superclasses of term (title or UUID)", "Serĉi superklasojn de termino (titolo aŭ UUID)"),
+        help=tr_multi("Serĉi superklasojn de termino (titolo aŭ UUID)", "Search superclasses of term (title or UUID)", "Rechercher les super-classes d'un terme (titre ou UUID)"),
     ),
     limo: int = typer.Option(
         10,
         "-L",
         "--limo",
-        help=tr("Max results (default 10)", "Max results (default 10)", "Maksimumaj rezultoj (defaŭlte 10)"),
+        help=tr_multi("Maksimumaj rezultoj (defaŭlte 10)", "Max results (default 10)", "Résultats max (10 par défaut)"),
     ),
     html: bool = typer.Option(
         False,
         "-H",
         "--html",
-        help=tr("Display results as semantic web diagram in browser", "Display results as semantic web diagram in browser", "Montri kiel semantikan retan diagramon en retumilo"),
+        help=tr_multi("Montri kiel semantikan retan diagramon en retumilo", "Display results as semantic web diagram in browser", "Display results as semantic web diagram in browser"),
     ),
     kopii: bool = typer.Option(
         False,
         "-k",
         "--kopii",
-        help=tr("Copy #uuid to clipboard", "Copy #uuid to clipboard", "Kopii #uuid al tondujo"),
+        help=tr_multi("Kopii #uuid al tondujo", "Copy #uuid to clipboard", "Copier #uuid dans le presse-papier"),
     ),
     semantika_kopii: bool = typer.Option(
         False,
         "-sk",
         "--semantika-kopii",
-        help=tr("Copy [titolo](#uuid) to clipboard", "Copy [titolo](#uuid) to clipboard", "Kopii [titolo](#uuid) al tondujo"),
+        help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
     ),
 ) -> None:
     """Search knowledge entries."""
@@ -577,13 +574,13 @@ def serci(
 def grafo(
     ref: str = typer.Argument(
         ...,
-        help=tr("UUID or title", "UUID or title", "UUID au titolo"),
+        help=tr_multi("UUID au titolo", "UUID or title", "UUID ou titre"),
     ),
     profundeco: int = typer.Option(
         3,
         "-d",
         "--depth",
-        help=tr("Maximum depth", "Maximum depth", "Maksimuma profundeco"),
+        help=tr_multi("Maksimuma profundeco", "Maximum depth", "Maximum depth"),
     ),
 ) -> None:
     """Show knowledge graph for an entry."""
@@ -635,17 +632,17 @@ def repacigi() -> None:
 def eksporti(
     ref: str = typer.Argument(
         ...,
-        help=tr("UUID or title", "UUID or title", "UUID aŭ titolo"),
+        help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
     ),
     celvojo: str = typer.Argument(
         ...,
-        help=tr("Output file", "Output file", "Eliga dosiero"),
+        help=tr_multi("Eliga dosiero", "Output file", "Output file"),
     ),
     formato: str = typer.Option(
         "enc",
         "--format",
         "-f",
-        help=tr("Format: enc or json", "Format: enc or json", "Formato: enc aŭ json"),
+        help=tr_multi("Formato: enc aŭ json", "Format: enc or json", "Format: enc or json"),
     ),
 ) -> None:
     """Export a knowledge entry."""
@@ -688,7 +685,7 @@ def eksporti(
 def importi(
     fonto: str = typer.Argument(
         ...,
-        help=tr("Input .enc file", "Input .enc file", "Eniga .enc dosiero"),
+        help=tr_multi("Eniga .enc dosiero", "Input .enc file", "Input .enc file"),
     ),
 ) -> None:
     """Import a knowledge entry from .enc file."""
@@ -733,12 +730,12 @@ def agordi() -> None:
 # Rubujo (Recycle Bin) commands
 # ──────────────────────────────────────────────────────────────────────────────
 
-rubujo_app = typer.Typer(name="rubujo", help=tr("Recycle bin", "Recycle bin", "Rubujo"))
+rubujo_app = typer.Typer(name="rubujo", help=tr_multi("Rubujo", "Recycle bin", "Recycle bin"))
 
 
 @rubujo_app.command("ls")
 def rubujo_ls(
-    limo: int = typer.Option(50, "--limo", "-n", help=tr("Max entries to show", "Max entries to show", "Maksimum da ensxtoj")),
+    limo: int = typer.Option(50, "--limo", "-n", help=tr_multi("Maksimum da ensxtoj", "Max entries to show", "Max entries to show")),
 ) -> None:
     """List trashed entries."""
     service = get_service()
@@ -760,7 +757,7 @@ def rubujo_ls(
 
 @rubujo_app.command("restaur")
 def rubujo_restauri(
-    ref: str = typer.Argument(..., help=tr("UUID or title", "UUID or title", "UUID au titolo")),
+    ref: str = typer.Argument(..., help=tr_multi("UUID au titolo", "UUID or title", "UUID ou titre")),
 ) -> None:
     """Restore entry from recycle bin."""
     service = get_service()
@@ -782,7 +779,7 @@ def rubujo_restauri(
 
 @rubujo_app.command("malplenigi")
 def rubujo_malplenigi(
-    konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr("Confirm without prompt", "Confirm without prompt", "Konfirmi sen demande")),
+    konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr_multi("Konfirmi sen demande", "Confirm without prompt", "Confirm without prompt")),
 ) -> None:
     """Empty the recycle bin."""
     if not konfirmi:
@@ -796,8 +793,8 @@ def rubujo_malplenigi(
 
 @rubujo_app.command("forigi")
 def rubujo_permanent_forigi(
-    ref: str = typer.Argument(..., help=tr("UUID or title", "UUID or title", "UUID au titolo")),
-    konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr("Confirm without prompt", "Confirm without prompt", "Konfirmi sen demande")),
+    ref: str = typer.Argument(..., help=tr_multi("UUID au titolo", "UUID or title", "UUID ou titre")),
+    konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr_multi("Konfirmi sen demande", "Confirm without prompt", "Confirm without prompt")),
 ) -> None:
     """Permanently delete entry from recycle bin."""
     if not konfirmi:
@@ -910,11 +907,11 @@ def _semantika_root(ctx: typer.Context) -> None:
 def semantika_ligilo_serci(
     demando: str = typer.Argument(
         ...,
-        help=tr("Search query for LIGILO/PRISKRIBO/ALIAZOJ", "Search query for LIGILO/PRISKRIBO/ALIAZOJ", "Requête de recherche pour LIGILO/PRISKRIBO/ALIAZOJ"),
+        help=tr_multi("Requête de recherche pour LIGILO/PRISKRIBO/ALIAZOJ", "Search query for LIGILO/PRISKRIBO/ALIAZOJ", "Search query for LIGILO/PRISKRIBO/ALIAZOJ"),
     ),
     lingvo: Optional[str] = typer.Option(
         None, "-l", "--lingvo",
-        help=tr("Language code(s) for Wikidata search (e.g. eo,en)", "Language code(s) for Wikidata search (e.g. eo,en)", "Code(s) de langue pour la recherche Wikidata (ex: eo,en)"),
+        help=tr_multi("Code(s) de langue pour la recherche Wikidata (ex: eo,en)", "Language code(s) for Wikidata search (e.g. eo,en)", "Code(s) de langue pour la recherche Wikidata (ex: eo,en)"),
     ),
 ) -> None:
     """Search Wikidata for semantic link types."""
@@ -991,11 +988,11 @@ def semantika_ligilo_serci(
 
 @semantika_app.command("aldoni")
 def semantika_ligilo_aldoni(
-    identigilo: str = typer.Argument(..., help=tr("Link or Wikidata ID (e.g. P1082 or wdt:P1082)", "Link or Wikidata ID (e.g. P1082 or wdt:P1082)", "Lien ou ID Wikidata (ex: P1082 ou wdt:P1082)")),
-    grupo: str = typer.Argument(..., help=tr("Target group (CSV file name)", "Target group (CSV file name)", "Groupe cible (nom du fichier CSV)")),
-    priskribo: Optional[str] = typer.Option(None, "-p", "--priskribo", help=tr("Manual description for offline fallback", "Manual description for offline fallback", "Description manuelle pour le repli hors ligne")),
-    aliazoj: Optional[str] = typer.Option(None, "-a", "--aliazoj", help=tr("Manual aliases (CSV) for offline fallback", "Manual aliases (CSV) for offline fallback", "Alias manuels (CSV) pour le repli hors ligne")),
-    lingvo: Optional[str] = typer.Option(None, "-l", "--lingvo", help=tr("Language code(s) for Wikidata metadata", "Language code(s) for Wikidata metadata", "Code(s) de langue pour les métadonnées Wikidata")),
+    identigilo: str = typer.Argument(..., help=tr_multi("Lien ou ID Wikidata (ex: P1082 ou wdt:P1082)", "Link or Wikidata ID (e.g. P1082 or wdt:P1082)", "Lien ou ID Wikidata (ex: P1082 ou wdt:P1082)")),
+    grupo: str = typer.Argument(..., help=tr_multi("Groupe cible (nom du fichier CSV)", "Target group (CSV file name)", "Groupe cible (nom du fichier CSV)")),
+    priskribo: Optional[str] = typer.Option(None, "-p", "--priskribo", help=tr_multi("Description manuelle pour le repli hors ligne", "Manual description for offline fallback", "Manual description for offline fallback")),
+    aliazoj: Optional[str] = typer.Option(None, "-a", "--aliazoj", help=tr_multi("Alias manuels (CSV) pour le repli hors ligne", "Manual aliases (CSV) for offline fallback", "Alias manuels (CSV) pour le repli hors ligne")),
+    lingvo: Optional[str] = typer.Option(None, "-l", "--lingvo", help=tr_multi("Code(s) de langue pour les métadonnées Wikidata", "Language code(s) for Wikidata metadata", "Code(s) de langue pour les métadonnées Wikidata")),
 ) -> None:
     """Add a semantic link type to a group.
     
@@ -1084,17 +1081,7 @@ _register_semantika_group_commands()
 def semantika_serci(
     esprimo: str = typer.Argument(
         ...,
-        help=tr(
-            "Conditions separated by ';'. Examples:\n"
-            '  encik semantika-serci "wdt:P5191 *philosophia*"\n'
-            '  encik semantika-serci "wdt:P1082 (0,1000); wdt:P31 true"',
-            "Conditions separated by ';'. Examples:\n"
-            '  encik semantika-serci "wdt:P5191 *philosophia*"\n'
-            '  encik semantika-serci "wdt:P1082 (0,1000); wdt:P31 true"',
-            "Conditions séparées par ';'. Exemples :\n"
-            '  encik semantika-serci "wdt:P5191 *philosophia*"\n'
-            '  encik semantika-serci "wdt:P1082 (0,1000); wdt:P31 true"',
-        ),
+        help=tr_multi("wdt:P1082 (0,1000); wdt:P31 true", "Conditions separated by ';'. Examples:\n", "Conditions separated by ';'. Examples:\n"),
     ),
 ) -> None:
     """Search entries by semantic conditions (AND between conditions).
