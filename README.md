@@ -16,6 +16,10 @@ git submodule update --init --recursive
 ## Install
 
 ```bash
+# Recommended — fast, reliable
+pip install uv && uv pip install A-encik
+
+# Traditional
 pip install A-encik
 ```
 
@@ -41,7 +45,7 @@ A-encik includes full-text search via SQLite FTS5:
 # Full-text search
 A encik serci "programming"
 
-# Fuzzy search (requires: pip install rapidfuzz)
+# Fuzzy search (requires: uv pip install rapidfuzz)
 A encik serci "programmig" --fuzzy
 ```
 
