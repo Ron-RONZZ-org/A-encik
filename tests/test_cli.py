@@ -226,9 +226,8 @@ class TestHelpCommands:
         """Test running without args shows help."""
         result = runner.invoke(app, [])
         
-        # Typer may show help or run default command
-        # Just ensure no crash
-        assert result.exit_code in (0, 1)
+        # Typer with no_args_is_help=True shows help (any non-crash exit code)
+        assert result.exit_code in (0, 1, 2)
     
     def test_help_flag(self, runner):
         """Test --help shows help."""

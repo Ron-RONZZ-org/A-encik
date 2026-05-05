@@ -153,7 +153,7 @@ service.delete(uuid, soft=True)
 
 ## Code Standards
 
-1. Use `tr()` for all user-facing strings
+1. Use `tr_multi()` for all user-facing strings (3-language inline: eo, en, fr)
 2. Use `error()` for errors, `info()` for info
 3. Type hints on all public functions
 4. Docstrings on all public functions
@@ -164,7 +164,7 @@ service.delete(uuid, soft=True)
 ## What to Avoid
 
 - Don't duplicate A-core utilities
-- Don't skip i18n (use `tr()`)
+- Don't skip i18n (use `tr_multi()`)
 - Don't use `print()` — use `A` output functions
 - Don't hardcode paths — use `A.core.paths`
 - Don't implement utilities that should be in core

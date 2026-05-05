@@ -13,8 +13,8 @@ from typing import Any
 from rich.table import Table
 from rich.text import Text
 
-from A import info, copy_to_clipboard
-from A.console import console, tr
+from A import info, copy_to_clipboard, tr_multi
+from A.console import console
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ def normalize_lingvo_codes(raw: str | None, field: str = "--lingvo") -> list[str
     for code in codes:
         if not re.fullmatch(r"[a-z]{2}", code):
             raise ValueError(
-                tr(
+                tr_multi(
                     f"Nevalida lingvokodo en {field}: {code!r} (uzu 2-literajn kodojn)",
                     f"Invalid language code in {field}: {code!r} (use 2-letter codes)",
                 )
@@ -333,7 +333,7 @@ def copy_entry_reference(
 
 def browser_fallback_hint() -> str:
     """Return a hint to use ``-H`` for content that needs a browser."""
-    return tr(
+    return tr_multi(
         "Uzu -H por malfermi en retumilo por KaTeX/bildoj",
         "Use -H to open in browser for KaTeX/images",
     )
@@ -372,188 +372,6 @@ def _semantika_description(tipo: str | None) -> str | None:
     return str(entry[0]) if entry else canonical
 
 
-def display_entry_panel(
-    entry: dict,
-    *,
-    selected_lang: str = "",
-    cxio: bool = False,
-) -> None:
-    """Display a knowledge entry as a styled Rich Panel.
-
-    Args:
-        entry: Entry dictionary.
-        selected_lang: Preferred language code (auto-detected if empty).
-        cxio: Show all languages and fields if True.
-    """
-    from rich.panel import Panel
-
-    terminologio = entry.get("terminologio") or {}
-    difinoj = entry.get("difinoj") or {}
-    if not selected_lang:
-        selected_lang = preferred_lang(terminologio, difinoj)
-    title = entry_locale_title(entry, [selected_lang] if selected_lang else None)
-
-    lines: list[str] = []
-    LW = 14  # label width
-
-    # Header
-    lines.append(f"  [dim]{'uuid:':<{LW}}[/dim] {entry.get('uuid', '')[:8]}")
-    lines.append(f"  [dim]{'lingvo:':<{LW}}[/dim] {selected_lang or '-'}")
-
-    # Terminologio (all langs if --cxio)
-    if cxio and terminologio:
-        lines.append(f"  [dim]{'terminologio:':<{LW}}[/dim]")
-        for lang, term in sorted(terminologio.items()):
-            lines.append(f"    {lang}: {render_markdown_text(term)}")
-
-    # Difino (preferred language)
-    difinio = (
-        difinoj.get(selected_lang)
-        or entry.get("difinio", "")
-        or next(iter(difinoj.values()), "")
-    ).strip()
-    if difinio:
-        if has_non_cli_renderable_markup(difinio):
-            lines.append(f"  [dim]{'difino:':<{LW}}[/dim]")
-            lines.append(f"    [dim]{browser_fallback_hint()}[/dim]")
-        else:
-            lines.append(f"  [dim]{'difino:':<{LW}}[/dim]")
-            for ln in difinio.splitlines():
-                lines.append(f"    {render_markdown_text(ln)}")
-
-    # All difinoj (if --cxio)
-    if cxio and difinoj:
-        lines.append(f"  [dim]{'difinoj:':<{LW}}[/dim]")
-        for lang, term_def in sorted(difinoj.items()):
-            lines.append(f"    {lang}: {render_markdown_text(term_def)}")
-
-    # Enhavo (if --cxio)
-    enhavo = (entry.get("enhavo") or "").strip()
-    if enhavo and cxio:
-        if has_non_cli_renderable_markup(enhavo):
-            lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
-            lines.append(f"    [dim]{browser_fallback_hint()}[/dim]")
-        else:
-            lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
-            for ln in enhavo.splitlines():
-                ln_stripped = ln.strip()
-                if ln_stripped:
-                    lines.append(f"    {render_markdown_text(ln_stripped)}")
-
-    # Subklaso (if --cxio)
-    if cxio:
-        entry_uuid = entry.get("uuid")
-        if entry_uuid:
-            from A_encik.service import get_service as _gs
-            subclasses = _gs().get_subclasses(entry_uuid, max_depth=1)
-            if subclasses:
-                lines.append(f"  [dim]{'subklaso:':<{LW}}[/dim]")
-                for child in subclasses:
-                    child_entry = child["entry"]
-                    child_title = entry_locale_title(child_entry)
-                    lines.append(f"    {child_title}  [dim]#{child_entry.get('uuid', '')[:8]}[/dim]")
-
-    # Ligilo
-    ligilo_items = display_ligilo_items(entry)
-    if ligilo_items:
-        grouped: dict[str, list[dict]] = {}
-        for item in ligilo_items:
-            tipo = item.get("tipo") or ""
-            if tipo not in grouped:
-                grouped[tipo] = []
-            grouped[tipo].append(item)
-
-        for tipo in sorted(grouped, key=lambda t: _sem_rank(t)):
-            items = grouped[tipo]
-            items.sort(key=lambda x: (x.get("titolo") or "").lower())
-            desc = _semantika_description(tipo) or tipo
-            for item in items:
-                linked_title = item.get("titolo", item["uuid"][:8])
-                linked_uuid = item["uuid"][:8]
-                lines.append(f"  [dim]{desc:<{LW}}[/dim] {linked_title}  [dim]#{linked_uuid}[/dim]")
-
-    # Fonto
-    fonto = entry.get("fonto") or []
-    if isinstance(fonto, str):
-        fonto = [fonto]
-    if fonto:
-        lines.append(f"  [dim]{'fonto:':<{LW}}[/dim]")
-        for src in fonto:
-            if isinstance(src, dict):
-                parts = [str(src[k]) for k in ("author", "aŭtoro", "autoro", "year", "jaro", "title", "titolo", "type", "tipo", "lingvo") if src.get(k)]
-                lines.append(f"    {'; '.join(parts) if parts else str(src)}")
-            elif src:
-                lines.append(f"    {str(src)}")
-
-    # Citajo
-    citajo = entry.get("citajo") or []
-    if isinstance(citajo, str):
-        citajo = [citajo]
-    if citajo:
-        lines.append(f"  [dim]{'citajo:':<{LW}}[/dim]")
-        for c in citajo:
-            if isinstance(c, dict):
-                text = str(c.get("teksto") or c.get("text") or "")
-                author = str(c.get("author") or c.get("autoro") or c.get("auxtoro") or "")
-                work = str(c.get("verko") or c.get("work") or "")
-                year = str(c.get("jaro") or c.get("year") or "")
-                parts = [f'"{text}"'] if text else []
-                if author:
-                    parts.append(author)
-                if work:
-                    parts.append(work)
-                if year:
-                    parts.append(year)
-                lines.append(f"    {'; '.join(parts)}")
-            elif c:
-                lines.append(f"    {str(c)}")
-
-    # Semantika
-    semantika = entry.get("semantika") or []
-    if isinstance(semantika, str):
-        semantika = [semantika]
-    if semantika:
-        lines.append(f"  [dim]{'semantiko:':<{LW}}[/dim]")
-        for item in (semantika if isinstance(semantika, list) else []):
-            if isinstance(item, dict):
-                arko = str(item.get("arko") or "")
-                valoro = str(item.get("valoro") or "")
-                unuo = str(item.get("unuo") or "")
-                desc = _semantika_description(arko) or arko
-                line = f"    {desc}: {valoro}"
-                if unuo:
-                    line += f" [{unuo}]"
-                lines.append(line)
-
-    # Datumo
-    datumo = entry.get("datumo") or {}
-    if isinstance(datumo, str):
-        try:
-            import json
-            datumo = json.loads(datumo)
-        except (json.JSONDecodeError, ValueError):
-            datumo = {}
-    if datumo:
-        lines.append(f"  [dim]{'datumo:':<{LW}}[/dim]")
-        for name in sorted(datumo.keys()):
-            data_rows = datumo[name]
-            row_count = len(data_rows) if isinstance(data_rows, list) else 1
-            lines.append(f"    {name}: {row_count} {tr('vico(j)', 'row(s)')}")
-
-    # Date stamps (if --cxio)
-    if cxio:
-        lines.append(f"  [dim]{'kreita:':<{LW}}[/dim] {(entry.get('kreita_je') or '')[:10]}")
-        lines.append(f"  [dim]{'modifita:':<{LW}}[/dim] {(entry.get('modifita_je') or '')[:10]}")
-
-    panel = Panel(
-        "\n".join(lines),
-        title=f"[bold]{render_markdown_text(title)}[/bold]",
-        expand=False,
-        border_style="dim",
-    )
-    console.print(panel)
-
-
 __all__ = [
     "preferred_lang",
     "entry_locale_title",
@@ -564,7 +382,6 @@ __all__ = [
     "print_candidates_table",
     "copy_entry_reference",
     "browser_fallback_hint",
-    "display_entry_panel",
     "_sem_rank",
     "_semantika_description",
 ]
