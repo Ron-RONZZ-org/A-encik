@@ -31,9 +31,12 @@ from A_encik.display_helpers import (
 
 app = typer.Typer(
     name="encik",
-    help=tr_multi("Encik — microapplication de gestion de connaissances.", "Encik — persona sci-mastruma mikroapo.", "Encik — persona sci-mastruma mikroapo."),
-    no_args_is_help=False,
-    invoke_without_command=True,
+    help=tr_multi(
+        "Encik — enciklopedio kaj konada micro-apo.",
+        "Encik — encyclopedia and knowledge micro-app.",
+        "Encik — micro-application encyclopédie et connaissance.",
+    ),
+    no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
 )
 
