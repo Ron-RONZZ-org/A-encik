@@ -149,11 +149,9 @@ class EncikService(CRUDService):
             return None
         return self._deserialize_row(row)
 
-    def find_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
-        """Find entries whose UUID starts with prefix."""
-        rows = self.db.execute(
-            "SELECT * FROM encik WHERE uuid LIKE ?", (f"{prefix}%",)
-        )
+    def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Find entries whose UUID starts with prefix (uses core CRUD method)."""
+        rows = super().find_by_uuid_prefix(prefix, limit=limit)
         return [self._deserialize_row(row) for row in rows]
 
     def search_fts(
