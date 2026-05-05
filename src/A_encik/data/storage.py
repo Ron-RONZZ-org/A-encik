@@ -54,6 +54,9 @@ def get_db() -> SQLiteDB:
         if stmt.strip():
             db.execute(stmt)
     migrate_db(db)
+    # Init semantika cache table (lazy import avoids circular dep)
+    from A_encik.data.semantika_cache import init_cache_table as _init_cache
+    _init_cache(db)
     return db
 
 
