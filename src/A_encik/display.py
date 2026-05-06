@@ -117,13 +117,28 @@ def _render_field(key: str, value: Any) -> str:
         # Render as key-value list, rendering markdown for MARKDOWN_FIELDS
         items = []
         use_markdown = key in MARKDOWN_FIELDS
-        for k, v in value.items():
-            if v:
-                if use_markdown and isinstance(v, str):
-                    rendered = render_markdown(v)
-                else:
-                    rendered = _escape_html(str(v))
-                items.append(f"<li><strong>{_escape_html(str(k))}</strong>: {rendered}</li>")
+
+        if key == "terminologio":
+            # Group identical terms across languages: {term: [langs...]}
+            groups: dict[str, list[str]] = {}
+            for lang, term in value.items():
+                term_str = str(term).strip() if term else ""
+                if term_str:
+                    groups.setdefault(term_str, []).append(lang)
+            for term_str, langs in sorted(groups.items(),
+                                          key=lambda x: x[1][0]):  # sort by first lang
+                lang_label = "/".join(langs)
+                rendered = render_markdown(term_str) if use_markdown else _escape_html(term_str)
+                items.append(f"<li><strong>{_escape_html(lang_label)}</strong>: {rendered}</li>")
+        else:
+            for k, v in value.items():
+                if v:
+                    if use_markdown and isinstance(v, str):
+                        rendered = render_markdown(v)
+                    else:
+                        rendered = _escape_html(str(v))
+                    items.append(f"<li><strong>{_escape_html(str(k))}</strong>: {rendered}</li>")
+
         if items:
             return f'<div class="field-content"><ul>{"".join(items)}</ul></div>'
         return ""
