@@ -15,10 +15,18 @@ from A.utils.output import info
 
 
 # Fields that contain Markdown and should be rendered as HTML
-MARKDOWN_FIELDS = ["enhavo", "difinoj", "terminologio", "datumo", "noto"]
+MARKDOWN_FIELDS = ["enhavo", "difinoj", "difinio", "terminologio", "datumo", "noto"]
 
 # Fields to display as-is (no markdown rendering)
 PLAIN_FIELDS = ["uuid", "kreita_je", "modifita_je", "forigita_je"]
+
+# Fields already rendered in the header (skip during field iteration)
+SKIP_FIELDS = {"titolo"}
+
+# Fields suppressed when a richer alternative exists
+FIELD_SUPPRESSIONS = {
+    "difinio": "difinoj",  # Skip singular difinio when plural difinoj is non-empty
+}
 
 
 def render_entry_html(
@@ -48,10 +56,16 @@ def render_entry_html(
     if modified:
         rows.append(f'<p class="meta">Modifita: {modified[:19]}</p>')
 
-    # Render content fields
+    # Render content fields (skip header fields and suppressions)
     for key, value in entry.items():
         if key in PLAIN_FIELDS:
             continue
+        if key in SKIP_FIELDS:
+            continue
+        if key in FIELD_SUPPRESSIONS:
+            richer = FIELD_SUPPRESSIONS[key]
+            if entry.get(richer):  # dict/list — truthy check
+                continue
         if include_fields and key not in include_fields:
             continue
 
@@ -100,11 +114,16 @@ def _render_field(key: str, value: Any) -> str:
             return f'<div class="field-content">{_escape_html(value)}</div>'
 
     elif isinstance(value, dict):
-        # Render as key-value list
+        # Render as key-value list, rendering markdown for MARKDOWN_FIELDS
         items = []
+        use_markdown = key in MARKDOWN_FIELDS
         for k, v in value.items():
             if v:
-                items.append(f"<li><strong>{_escape_html(str(k))}</strong>: {_escape_html(str(v))}</li>")
+                if use_markdown and isinstance(v, str):
+                    rendered = render_markdown(v)
+                else:
+                    rendered = _escape_html(str(v))
+                items.append(f"<li><strong>{_escape_html(str(k))}</strong>: {rendered}</li>")
         if items:
             return f'<div class="field-content"><ul>{"".join(items)}</ul></div>'
         return ""
