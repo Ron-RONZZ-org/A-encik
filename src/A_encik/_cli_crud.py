@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 
 import typer
 from rich.table import Table
@@ -367,10 +367,10 @@ def register_commands(app: typer.Typer) -> None:
 
     @app.command("forigi")
     def forigi(
-        ref: str = typer.Argument(
+        refs: Annotated[list[str], typer.Argument(
             ...,
-            help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
-        ),
+            help=tr_multi("UUID aŭ titolo (pluraj)", "UUID or title (multiple)", "UUID ou titre (plusieurs)"),
+        )],
         hard: bool = typer.Option(
             False,
             "--hard",
@@ -378,30 +378,32 @@ def register_commands(app: typer.Typer) -> None:
             help=tr_multi("Suppression permanente", "Permanent delete (no trash)", "Suppression définitive (pas de corbeille)"),
         ),
     ) -> None:
-        """Delete a knowledge entry."""
+        """Delete knowledge entries."""
         service = get_service()
+        for ref in refs:
+            try:
+                entry = service.get(ref)
+                if not entry:
+                    entry = service.find_by_titolo(ref)
+                if not entry:
+                    matches = service.find_by_uuid_prefix(ref)
+                    if matches:
+                        if len(matches) == 1:
+                            entry = matches[0]
+                        else:
+                            error(tr_multi("Uz pli specifan referencon", "Use a more specific reference", "Uzu pli specifan referencon"))
+                            continue
 
-        entry = service.get(ref)
-        if not entry:
-            entry = service.find_by_titolo(ref)
-        if not entry:
-            matches = service.find_by_uuid_prefix(ref)
-            if matches:
-                if len(matches) == 1:
-                    entry = matches[0]
+                if not entry:
+                    error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
+                    continue
+
+                uuid = entry["uuid"]
+                soft = not hard
+                service.delete(uuid, soft=soft)
+                if soft:
+                    info(tr_multi(f"Forigis {entry['titolo']} (sxoveblas)", f"Deleted {entry['titolo']} (soft)", f"Supprime {entry['titolo']} ( mou)"))
                 else:
-                    error(tr_multi("Uz pli specifan referencon", "Use a more specific reference", "Uzu pli specifan referencon"))
-                    raise typer.Exit(1)
-
-        if not entry:
-            error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
-            raise typer.Exit(1)
-
-        uuid = entry["uuid"]
-        soft = not hard
-        service.delete(uuid, soft=soft)
-
-        if soft:
-            info(tr_multi(f"Forigis {entry['titolo']} (sxoveblas)", f"Deleted {entry['titolo']} (soft)", f"Supprime {entry['titolo']} ( mou)"))
-        else:
-            info(tr_multi(f"Forigis {entry['titolo']} (permanenta)", f"Deleted {entry['titolo']} (permanent)", f"Supprime {entry['titolo']} (permanent)"))
+                    info(tr_multi(f"Forigis {entry['titolo']} (permanenta)", f"Deleted {entry['titolo']} (permanent)", f"Supprime {entry['titolo']} (permanent)"))
+            except Exception as e:
+                error(str(e))

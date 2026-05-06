@@ -75,10 +75,10 @@ def rubujo_malplenigi(
 
 @rubujo_app.command("forigi")
 def rubujo_permanent_forigi(
-    ref: str = typer.Argument(..., help=tr_multi("UUID au titolo", "UUID or title", "UUID ou titre")),
+    refs: Annotated[list[str], typer.Argument(..., help=tr_multi("UUID au titolo (pluraj)", "UUID or title (multiple)", "UUID ou titre (plusieurs)")],
     konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr_multi("Konfirmi sen demande", "Confirm without prompt", "Confirmer sans demande")),
 ) -> None:
-    """Permanently delete entry from recycle bin."""
+    """Permanently delete entries from recycle bin."""
     if not konfirmi:
         console.print(tr_multi("Uz --jes por konfirmi", "Use --jes to confirm", "Utilisez --jes pour confirmer"))
         raise typer.Exit(1)
