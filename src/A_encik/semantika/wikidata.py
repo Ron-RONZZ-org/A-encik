@@ -46,7 +46,7 @@ def semantika_search_languages(lingvo: str | None) -> list[str]:
     return ["eo", "en"]
 
 
-def _wikidata_api_get(params: dict[str, str], *, timeout: float = 5.0) -> dict[str, Any]:
+def _wikidata_api_get(params: dict[str, str], *, timeout: float = 30.0) -> dict[str, Any]:
     """Make a GET request to the Wikidata API.
 
     Args:

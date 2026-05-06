@@ -90,6 +90,10 @@ def lookup_property(keyword: str) -> dict[str, Any]:
         _batch_store(api_results, source="api")
         return {"results": api_results}
 
+    # API failed or no results — fall back to any stale cache entry
+    stale = _check_db_cache(kw[:3])  # Broader search: first 3 chars
+    if stale:
+        return {"results": stale, "source": "stale_cache"}
     return {"results": [], "message": f"No Wikidata properties found for '{keyword}'"}
 
 
@@ -175,37 +179,45 @@ def _extract_property_id(ligilo: str) -> str | None:
     return match.group(1) if match else None
 
 
-def _query_wikidata_api(keyword: str) -> list[dict] | None:
+def _query_wikidata_api(keyword: str, retries: int = 2) -> list[dict] | None:
     """Query Wikidata API for properties matching keyword.
 
-    Always queries with English priority.
+    Always queries with English priority. Retries on failure.
 
     Args:
         keyword: English keyword
+        retries: Number of retry attempts (default 2)
 
     Returns:
         List of property dicts or None
     """
-    try:
-        from A_encik.semantika.wikidata import wikidata_search_properties
-        results = wikidata_search_properties(keyword, languages=["en", "eo", "fr"])
-        if results:
-            return [
-                {
-                    "id": _extract_property_id(r.get("ligilo", "")) or r.get("ligilo", ""),
-                    "label": r.get("etikedo", ""),
-                    "description": r.get("priskribo", ""),
-                    "label_eo": "",
-                }
-                for r in results
-                if _extract_property_id(r.get("ligilo", ""))
-            ]
-        return None
-    except ImportError:
-        return None
-    except Exception as e:
-        _warn(f"Wikidata API query failed for '{keyword}': {e}")
-        return None
+    for attempt in range(1, retries + 2):  # initial + retries
+        try:
+            from A_encik.semantika.wikidata import wikidata_search_properties
+            results = wikidata_search_properties(keyword, languages=["en", "eo", "fr"])
+            if results:
+                return [
+                    {
+                        "id": _extract_property_id(r.get("ligilo", "")) or r.get("ligilo", ""),
+                        "label": r.get("etikedo", ""),
+                        "description": r.get("priskribo", ""),
+                        "label_eo": "",
+                    }
+                    for r in results
+                    if _extract_property_id(r.get("ligilo", ""))
+                ]
+            return None  # API succeeded but no results
+        except ImportError:
+            return None
+        except Exception as e:
+            if attempt <= retries:
+                import time
+                _warn(f"Wikidata API retry {attempt}/{retries} for '{keyword}': {e}")
+                time.sleep(2.0)
+            else:
+                _warn(f"Wikidata API query failed for '{keyword}': {e}")
+                return None
+    return None
 
 
 # ── Cache storage ────────────────────────────────────────────────────────────
