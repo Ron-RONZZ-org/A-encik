@@ -164,7 +164,47 @@ def register_commands(app: typer.Typer) -> None:
         )
         display_entry_panel(entry, selected_lang=selected_lang, cxio=cxio)
 
-    @app.command("aldoni")
+    @app.command(
+        "aldoni",
+        epilog=tr_multi(
+            "\n.enc formato (por --terminologio, --difino ktp):\n"
+            "  terminologio.eo = \"Termino\"\n"
+            "  terminologio.en = \"Term\"\n"
+            "  difino.eo = \"Difino\"\n"
+            "  difino.en = \"Definition\"\n"
+            "  enhavo = \"\"\"Plena enhavo...\"\"\"\n"
+            "  superklaso = [\"uuid1\", \"uuid2\"]\n"
+            "  ligilo = [\"uuid1\", [\"uuid2\", \"rdf:type\"]]\n"
+            "  fonto = [{titolo=\"...\", autoro=\"...\", jaro=2024, tipo=\"lib\"}]\n"
+            "  citajo = [{teksto=\"...\", autoro=\"...\", verko=\"...\"}]\n"
+            "  datumo.nomo = \"\"\"{...json...}\"\"\"\n"
+            "Vidu A-encik dokumentaron por plena .enc referenco.",
+            "\n.enc format (for --terminologio, --difino etc.):\n"
+            "  terminologio.eo = \"Term\"\n"
+            "  terminologio.en = \"Term\"\n"
+            "  difino.eo = \"Definition\"\n"
+            "  difino.en = \"Definition\"\n"
+            "  enhavo = \"\"\"Full content...\"\"\"\n"
+            "  superklaso = [\"uuid1\", \"uuid2\"]\n"
+            "  ligilo = [\"uuid1\", [\"uuid2\", \"rdf:type\"]]\n"
+            "  fonto = [{title=\"...\", author=\"...\", year=2024, type=\"book\"}]\n"
+            "  citajo = [{text=\"...\", author=\"...\", work=\"...\"}]\n"
+            "  datumo.name = \"\"\"{...json...}\"\"\"\n"
+            "See A-encik docs for full .enc reference.",
+            "\nFormat .enc (pour --terminologio, --difino etc.) :\n"
+            "  terminologio.eo = \"Terme\"\n"
+            "  terminologio.en = \"Term\"\n"
+            "  difino.eo = \"Definition\"\n"
+            "  difino.en = \"Definition\"\n"
+            "  enhavo = \"\"\"Contenu complet...\"\"\"\n"
+            "  superklaso = [\"uuid1\", \"uuid2\"]\n"
+            "  ligilo = [\"uuid1\", [\"uuid2\", \"rdf:type\"]]\n"
+            "  fonto = [{title=\"...\", author=\"...\", year=2024, type=\"book\"}]\n"
+            "  citajo = [{text=\"...\", author=\"...\", work=\"...\"}]\n"
+            "  datumo.nom = \"\"\"{...json...}\"\"\"\n"
+            "Voir documentation A-encik pour référence .enc complète.",
+        ),
+    )
     def aldoni(
         titolo: str = typer.Argument(..., help=tr_multi("Titolo", "Title", "Title")),
         difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Difino", "Definition", "Definition")),
