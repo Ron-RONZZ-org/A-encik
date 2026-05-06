@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
 from A import error, info
@@ -75,7 +77,7 @@ def rubujo_malplenigi(
 
 @rubujo_app.command("forigi")
 def rubujo_permanent_forigi(
-    refs: Annotated[list[str], typer.Argument(..., help=tr_multi("UUID au titolo (pluraj)", "UUID or title (multiple)", "UUID ou titre (plusieurs)")],
+    refs: Annotated[list[str], typer.Argument(..., help=tr_multi("UUID au titolo (pluraj)", "UUID or title (multiple)", "UUID ou titre (plusieurs)"))],
     konfirmi: bool = typer.Option(False, "--jes", "-y", help=tr_multi("Konfirmi sen demande", "Confirm without prompt", "Confirmer sans demande")),
 ) -> None:
     """Permanently delete entries from recycle bin."""
