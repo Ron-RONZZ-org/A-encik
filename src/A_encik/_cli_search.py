@@ -122,6 +122,10 @@ def register_commands(app: typer.Typer) -> None:
             target = candidates[idx]
             if kopii or semantika_kopii:
                 copy_entry_reference(target, semantika=semantika_kopii)
+            # Auto-open for KaTeX/images content
+            from A_encik.display import maybe_auto_open_browser
+            if maybe_auto_open_browser(target):
+                return
             display_entry_panel(target, selected_lang=_preferred_search_lang(target))
 
         if demando is None:

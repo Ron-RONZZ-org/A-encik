@@ -16,10 +16,8 @@ from A_encik.display_helpers import (
     preferred_lang,
     entry_locale_title,
     render_markdown_text,
-    has_non_cli_renderable_markup,
     display_ligilo_items,
     copy_entry_reference,
-    browser_fallback_hint,
 )
 from A_encik.display import display_entry_panel
 
@@ -149,9 +147,13 @@ def register_commands(app: typer.Typer) -> None:
 
         if html or open_browser:
             from A_encik.display import preview_entry
-            preview_entry(entry, open_browser=open_browser)
-            if open_browser:
-                info(tr_multi("Malfermis en retumilo", "Opened in browser", "Ouvert dans le navigateur"))
+            preview_entry(entry, open_browser=True)
+            info(tr_multi("Malfermis en retumilo", "Opened in browser", "Ouvert dans le navigateur"))
+            return
+
+        # Auto-open for KaTeX/images content
+        from A_encik.display import maybe_auto_open_browser
+        if maybe_auto_open_browser(entry):
             return
 
         if kopii or semantika_kopii:

@@ -5,6 +5,7 @@ Uses A-core markdown_parser and markdown_html_view for rendering.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +150,39 @@ def preview_entry(
     return preview_html(html, open_browser=open_browser, title=title)
 
 
+def maybe_auto_open_browser(entry: dict[str, Any]) -> bool:
+    """Auto-open entry in browser if it contains KaTeX/images.
+
+    Checks markdown fields for non-CLI-renderable markup.
+    Respects ``A_ENCIK_DISABLE_BROWSER_AUTO_OPEN`` env var to opt out.
+
+    Returns True if browser was opened (caller should return early), False otherwise.
+    """
+    if os.environ.get("A_ENCIK_DISABLE_BROWSER_AUTO_OPEN"):
+        return False
+
+    from A import tr_multi
+    from A_encik.display_helpers import has_non_cli_renderable_markup
+
+    entry_body = " ".join(
+        filter(None, [
+            entry.get("enhavo", "") or "",
+            entry.get("difinio", "") or "",
+            *((entry.get("difinoj") or {}).values()),
+        ])
+    )
+    if not has_non_cli_renderable_markup(entry_body):
+        return False
+
+    preview_entry(entry, open_browser=True)
+    info(tr_multi(
+        "Malfermis en retumilo por KaTeX/bildoj",
+        "Opened in browser for KaTeX/images",
+        "Ouvert dans le navigateur pour KaTeX/images",
+    ))
+    return True
+
+
 def display_entry_panel(
     entry: dict,
     *,
@@ -170,9 +204,7 @@ def display_entry_panel(
         preferred_lang,
         entry_locale_title,
         render_markdown_text,
-        has_non_cli_renderable_markup,
         display_ligilo_items,
-        browser_fallback_hint,
         _sem_rank,
         _semantika_description,
     )
@@ -200,13 +232,9 @@ def display_entry_panel(
         or next(iter(difinoj.values()), "")
     ).strip()
     if difinio:
-        if has_non_cli_renderable_markup(difinio):
-            lines.append(f"  [dim]{'difino:':<{LW}}[/dim]")
-            lines.append(f"    [dim]{browser_fallback_hint()}[/dim]")
-        else:
-            lines.append(f"  [dim]{'difino:':<{LW}}[/dim]")
-            for ln in difinio.splitlines():
-                lines.append(f"    {render_markdown_text(ln)}")
+        lines.append(f"  [dim]{'difino:':<{LW}}[/dim]")
+        for ln in difinio.splitlines():
+            lines.append(f"    {render_markdown_text(ln)}")
 
     if cxio and difinoj:
         lines.append(f"  [dim]{'difinoj:':<{LW}}[/dim]")
@@ -215,15 +243,11 @@ def display_entry_panel(
 
     enhavo = (entry.get("enhavo") or "").strip()
     if enhavo and cxio:
-        if has_non_cli_renderable_markup(enhavo):
-            lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
-            lines.append(f"    [dim]{browser_fallback_hint()}[/dim]")
-        else:
-            lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
-            for ln in enhavo.splitlines():
-                ln_stripped = ln.strip()
-                if ln_stripped:
-                    lines.append(f"    {render_markdown_text(ln_stripped)}")
+        lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
+        for ln in enhavo.splitlines():
+            ln_stripped = ln.strip()
+            if ln_stripped:
+                lines.append(f"    {render_markdown_text(ln_stripped)}")
 
     if cxio:
         entry_uuid = entry.get("uuid")
@@ -251,7 +275,7 @@ def display_entry_panel(
             items.sort(key=lambda x: (x.get("titolo") or "").lower())
             desc = _semantika_description(tipo) or tipo
             for item in items:
-                linked_title = item.get("titolo", item["uuid"][:8])
+                linked_title = item.get("titolo") or tr_multi("ne trovita", "not found", "non trouvé")
                 linked_uuid = item["uuid"][:8]
                 lines.append(f"  [dim]{desc:<{LW}}[/dim] {linked_title}  [dim]#{linked_uuid}[/dim]")
 
@@ -314,7 +338,7 @@ def display_entry_panel(
             datumo = {}
     if datumo:
         lines.append(f"  [dim]{'datumo:':<{LW}}[/dim]")
-        for name in sorted(datumo.keys()):
+        for name in sorted(k for k in datumo if not k.startswith("_")):
             data_rows = datumo[name]
             row_count = len(data_rows) if isinstance(data_rows, list) else 1
             lines.append(f"    {name}: {row_count} {tr_multi('vico(j)', 'row(s)')}")
@@ -332,4 +356,4 @@ def display_entry_panel(
     console.print(panel)
 
 
-__all__ = ["render_entry_html", "preview_entry", "display_entry_panel", "MARKDOWN_FIELDS"]
+__all__ = ["render_entry_html", "preview_entry", "maybe_auto_open_browser", "display_entry_panel", "MARKDOWN_FIELDS"]

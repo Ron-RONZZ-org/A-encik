@@ -331,47 +331,6 @@ def copy_entry_reference(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def browser_fallback_hint() -> str:
-    """Return a hint to use ``-H`` for content that needs a browser."""
-    return tr_multi(
-        "Uzu -H por malfermi en retumilo por KaTeX/bildoj",
-        "Use -H to open in browser for KaTeX/images",
-    )
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Entry Panel display
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-def _sem_rank(tipo: str | None) -> int:
-    """Rank a semantic link type for display ordering."""
-    if not tipo:
-        return 99
-    _RANK: dict[str, int] = {
-        "rdf:type": 0,
-        "rdfs:subClassOf": 1,
-        "owl:inverseOf": 2,
-        "owl:disjointWith": 3,
-    }
-    return _RANK.get(tipo, 4)
-
-
-def _semantika_description(tipo: str | None) -> str | None:
-    """Look up a human-readable description for a semantic link type."""
-    if not tipo:
-        return None
-    from A_encik.semantika.config import normalize_semantika_ligilo
-
-    canonical = normalize_semantika_ligilo(tipo)
-    if not canonical:
-        return tipo
-    from A_encik.semantika.config import _SEMANTIKA_DEFINOJ_MAP
-
-    entry = _SEMANTIKA_DEFINOJ_MAP.get(canonical)
-    return str(entry[0]) if entry else canonical
-
-
 __all__ = [
     "preferred_lang",
     "entry_locale_title",
@@ -381,7 +340,6 @@ __all__ = [
     "display_ligilo_items",
     "print_candidates_table",
     "copy_entry_reference",
-    "browser_fallback_hint",
     "_sem_rank",
     "_semantika_description",
 ]
