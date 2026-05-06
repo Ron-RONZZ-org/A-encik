@@ -40,9 +40,14 @@ def init_cache_table(db=None) -> None:
         db: SQLiteDB instance (provided by storage.py to avoid circular imports)
     """
     if db is None:
-        from A_encik.data.storage import get_db as _get_db
         db = _get_db()
     db.execute(CREATE_SEMANTIKA_CACHE)
+
+
+def _get_db():
+    """Get database connection (lazy import to avoid circular deps)."""
+    from A_encik.data.storage import get_db as _db
+    return _db()
 
 
 def _now_iso() -> str:
