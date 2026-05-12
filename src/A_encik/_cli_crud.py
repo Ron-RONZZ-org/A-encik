@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
@@ -206,7 +207,7 @@ def register_commands(app: typer.Typer) -> None:
         ),
     )
     def aldoni(
-        titolo: str = typer.Argument(..., help=tr_multi("Titolo", "Title", "Title")),
+        titolo: str = typer.Argument(..., help=tr_multi("Titolo aŭ .enc-dosiero", "Title or .enc file", "Titre ou fichier .enc")),
         difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Difino", "Definition", "Definition")),
         enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Enhavo", "Content", "Content")),
         terminologio: Optional[str] = typer.Option(None, "-t", "--terminologio", help=tr_multi("Terminologio (JSON)", "Terminology (JSON)", "Terminologie (JSON)")),
@@ -230,6 +231,35 @@ def register_commands(app: typer.Typer) -> None:
         import json
 
         service = get_service()
+
+        # Detect .enc file path — if the argument is a path to an existing
+        # .enc file, parse and import it (matching autish-legacy behaviour).
+        _enc_candidate = Path(titolo).expanduser().resolve()
+        if _enc_candidate.suffix == ".enc" and _enc_candidate.is_file():
+            from A_encik.enc_format import parse_enc_file, validate_enc_entry
+            try:
+                parsed = parse_enc_file(_enc_candidate)
+            except ValueError as exc:
+                error(str(exc))
+                raise typer.Exit(1)
+            errors = validate_enc_entry(parsed)
+            if errors:
+                for e in errors:
+                    error(f"Validiga eraro: {e}")
+                raise typer.Exit(1)
+            entry = service.create(parsed)
+            info(tr_multi(
+                f"Aldonis {parsed['titolo']}",
+                f"Added {parsed['titolo']}",
+                f"Ajoute {parsed['titolo']}",
+            ))
+            console.print(f"[green]UUID:[/] {entry.get('uuid')}")
+            if kopii or semantika_kopii:
+                if kopii:
+                    copy_to_clipboard(f"#{entry['uuid'][:8]}")
+                if semantika_kopii:
+                    copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
+            return
 
         data: dict = {"titolo": titolo}
 

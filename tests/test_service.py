@@ -14,8 +14,70 @@ class TestEncikService:
     
     @pytest.fixture
     def mock_db(self):
-        """Create a mock database."""
+        """Create a mock database with minimal schema stubs."""
         db = MagicMock()
+
+        # Schema statement returned for sqlite_master query
+        mock_create = (
+            "CREATE TABLE encik ("
+            "uuid TEXT PRIMARY KEY, titolo TEXT NOT NULL DEFAULT '', "
+            "difinio TEXT NOT NULL DEFAULT '', "
+            "terminologio TEXT NOT NULL DEFAULT '{}', "
+            "difinoj TEXT NOT NULL DEFAULT '{}', "
+            "enhavo TEXT NOT NULL DEFAULT '', "
+            "superklaso TEXT NOT NULL DEFAULT '[]', "
+            "ligilo TEXT NOT NULL DEFAULT '[]', "
+            "fonto TEXT NOT NULL DEFAULT '[]', "
+            "citajo TEXT NOT NULL DEFAULT '[]', "
+            "datumo TEXT NOT NULL DEFAULT '{}', "
+            "semantika TEXT NOT NULL DEFAULT '[]', "
+            "ligiloj TEXT NOT NULL DEFAULT '[]', "
+            "kreita_je TEXT NOT NULL, modifita_je TEXT NOT NULL"
+            ")"
+        )
+
+        # Columns: cid, name, type, notnull, dflt_value, pk
+        main_cols = [
+            (0, "uuid", "TEXT", 1, None, 1),
+            (1, "titolo", "TEXT", 1, "''", 0),
+            (2, "difinio", "TEXT", 1, "''", 0),
+            (3, "terminologio", "TEXT", 1, "'{}'", 0),
+            (4, "difinoj", "TEXT", 1, "'{}'", 0),
+            (5, "enhavo", "TEXT", 1, "''", 0),
+            (6, "superklaso", "TEXT", 1, "'[]'", 0),
+            (7, "ligilo", "TEXT", 1, "'[]'", 0),
+            (8, "fonto", "TEXT", 1, "'[]'", 0),
+            (9, "citajo", "TEXT", 1, "'[]'", 0),
+            (10, "datumo", "TEXT", 1, "'{}'", 0),
+            (11, "semantika", "TEXT", 1, "'[]'", 0),
+            (12, "ligiloj", "TEXT", 1, "'[]'", 0),
+            (13, "kreita_je", "TEXT", 1, None, 0),
+            (14, "modifita_je", "TEXT", 1, None, 0),
+        ]
+
+        call_count = {"execute_one": 0}
+
+        def execute_one_side_effect(sql, *args):
+            call_count["execute_one"] += 1
+            upper = sql.strip().upper()
+            # First call: schema lookup for _ensure_trash_table
+            if "FROM SQLITE_MASTER" in upper:
+                return {"sql": mock_create}
+            # FTS count check
+            if "SELECT COUNT(*) AS CNT" in upper:
+                return {"cnt": 0}
+            return {}
+
+        def execute_side_effect(sql, *args):
+            upper = sql.strip().upper()
+            if upper.startswith("PRAGMA TABLE_INFO(ENCIK"):
+                return main_cols
+            if upper.startswith("PRAGMA TABLE_INFO(ENCIK_RUBUJO"):
+                return []
+            return []
+
+        db.execute_one.side_effect = execute_one_side_effect
+        db.execute.side_effect = execute_side_effect
         return db
     
     @pytest.fixture

@@ -39,6 +39,25 @@ VALID_ENC_KEYS = frozenset({
 def _format_enc_parse_error(raw: str, exc: Exception) -> str:
     """Format a TOML parse error with line/col hints for .enc context."""
     msg = str(exc)
+    lowered = msg.lower()
+
+    # Build hints based on error type
+    hints: list[str] = []
+    if "cannot overwrite a value" in lowered:
+        hints.append(
+            "Sama kampo aperas plurfoje. .enc dosiero rajtas enteni nur unu eniron; "
+            "forigu duplikat(ajn) kampon(j)n aŭ dividu en apartajn dosierojn."
+        )
+    if "invalid value" in lowered:
+        hints.append(
+            "Kontrolu ĉu tekstoj estas en citiloj kaj listoj/tabeloj estas "
+            "ĝuste fermitaj per ] aŭ }."
+        )
+    if "expected '=' after a key" in lowered:
+        hints.append("Verŝajne mankas '=' inter kampnomo kaj valoro.")
+    if "unterminated" in lowered or "unclosed" in lowered:
+        hints.append("Mankas ferma citilo, ] aŭ }.")
+
     # Try to extract line number from TOML error
     match = re.search(r"line (\d+), col (\d+)", msg)
     if match:
@@ -48,12 +67,19 @@ def _format_enc_parse_error(raw: str, exc: Exception) -> str:
             context = lines[line_no - 1].strip()
             if len(context) > 80:
                 context = context[:77] + "..."
-            return (
+            result = (
                 f"Sintaksa eraro ĉe linio {line_no} (kolumno {match.group(2)}):\n"
                 f"  {context}\n"
                 f"  {msg}"
             )
-    return f"Nevalida .enc: {msg}"
+            if hints:
+                result += "\n" + "\n".join(f"  * {h}" for h in hints)
+            return result
+
+    result = f"Nevalida .enc: {msg}"
+    if hints:
+        result += "\n" + "\n".join(f"  * {h}" for h in hints)
+    return result
 
 
 def _validate_enc_keys(data: dict) -> None:
