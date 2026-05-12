@@ -46,7 +46,7 @@ def semantika_search_languages(lingvo: str | None) -> list[str]:
     return ["eo", "en"]
 
 
-def _wikidata_api_get(params: dict[str, str], *, timeout: float = 30.0) -> dict[str, Any]:
+def _wikidata_api_get(params: dict[str, str], *, timeout: float = 45.0) -> dict[str, Any]:
     """Make a GET request to the Wikidata API.
 
     Args:
@@ -66,8 +66,11 @@ def _wikidata_api_get(params: dict[str, str], *, timeout: float = 30.0) -> dict[
         with urllib.request.urlopen(request, timeout=timeout) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             payload = response.read().decode(charset, errors="replace")
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise RuntimeError("Wikidata API neatingebla") from exc
+    except urllib.error.URLError as exc:
+        reason = str(exc.reason) if hasattr(exc, 'reason') else str(exc)
+        raise RuntimeError(f"Wikidata API neatingebla (reto: {reason})") from exc
+    except TimeoutError as exc:
+        raise RuntimeError(f"Wikidata API neatingebla (eltempiĝis post {timeout}s)") from exc
     try:
         data = json.loads(payload)
     except json.JSONDecodeError as exc:
@@ -120,24 +123,41 @@ def wikidata_search_properties(
 ) -> list[dict[str, Any]]:
     """Search Wikidata for properties matching a query.
 
+    Single English search for efficiency (+ prioritized languages).
+    Unlike most Wikidata lookups, property IDs (P-numbers) are
+    language-agnostic — a single search suffices to find matching
+    properties.  Multi-language labels are resolved via the separate
+    ``_wikidata_properties_metadata`` enrichment step.
+
     Args:
         query: Free-text search string.
-        languages: Prioritised language codes.
+        languages: Prioritised language codes for label enrichment.
 
     Returns:
         List of result dicts with keys: ligilo, priskribo, aliasoj, etikedo, fonto.
     """
     dedup: dict[str, dict[str, Any]] = {}
-    for lang in languages:
-        data = _wikidata_api_get({
-            "action": "wbsearchentities",
-            "format": "json",
-            "language": lang,
-            "uselang": lang,
-            "type": "property",
-            "limit": "15",
-            "search": query,
-        })
+
+    # Step 1: search in English (+ prioritized languages to catch
+    # non-English labels for same property).
+    seen_lang: set[str] = set()
+    for lang in _semantika_language_priority(languages):
+        if lang in seen_lang:
+            continue
+        seen_lang.add(lang)
+        try:
+            data = _wikidata_api_get({
+                "action": "wbsearchentities",
+                "format": "json",
+                "language": lang,
+                "uselang": lang,
+                "type": "property",
+                "limit": "15",
+                "search": query,
+            })
+        except RuntimeError:
+            # Language-specific search failed — try next language
+            continue
         results = data.get("search")
         if not isinstance(results, list):
             continue

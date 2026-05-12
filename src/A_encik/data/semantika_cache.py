@@ -7,6 +7,7 @@ Always queries in English for consistency (Wikidata lacks non-English descriptio
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -85,6 +86,9 @@ def lookup_property(keyword: str) -> dict[str, Any]:
         return {"results": csv_results}
 
     # 3. Query Wikidata API
+    if _check_negative_cache(kw):
+        return {"results": [], "message": f"No Wikidata properties found for '{keyword}'"}
+
     api_results = _query_wikidata_api(kw)
     if api_results:
         _batch_store(api_results, source="api")
@@ -179,10 +183,16 @@ def _extract_property_id(ligilo: str) -> str | None:
     return match.group(1) if match else None
 
 
+# Last API failure timestamp for circuit breaker
+_last_api_failure: float = 0.0
+_CIRCUIT_BREAKER_SECONDS = 60
+
+
 def _query_wikidata_api(keyword: str, retries: int = 2) -> list[dict] | None:
     """Query Wikidata API for properties matching keyword.
 
     Always queries with English priority. Retries on failure.
+    Includes circuit breaker for repeated failures.
 
     Args:
         keyword: English keyword
@@ -191,33 +201,91 @@ def _query_wikidata_api(keyword: str, retries: int = 2) -> list[dict] | None:
     Returns:
         List of property dicts or None
     """
+    global _last_api_failure
+
+    # Circuit breaker: skip if API failed recently
+    if time.time() - _last_api_failure < _CIRCUIT_BREAKER_SECONDS:
+        return None
+
     for attempt in range(1, retries + 2):  # initial + retries
         try:
             from A_encik.semantika.wikidata import wikidata_search_properties
             results = wikidata_search_properties(keyword, languages=["en", "eo", "fr"])
             if results:
-                return [
-                    {
-                        "id": _extract_property_id(r.get("ligilo", "")) or r.get("ligilo", ""),
-                        "label": r.get("etikedo", ""),
-                        "description": r.get("priskribo", ""),
-                        "label_eo": "",
-                    }
-                    for r in results
-                    if _extract_property_id(r.get("ligilo", ""))
-                ]
-            return None  # API succeeded but no results
+                # Deduplicate by id before returning
+                seen_ids: set[str] = set()
+                deduped = []
+                for r in results:
+                    rid = _extract_property_id(r.get("ligilo", ""))
+                    if rid and rid not in seen_ids:
+                        seen_ids.add(rid)
+                        deduped.append({
+                            "id": rid,
+                            "label": r.get("etikedo", ""),
+                            "description": r.get("priskribo", ""),
+                            "label_eo": "",
+                        })
+                if deduped:
+                    _last_api_failure = 0.0  # reset circuit breaker on success
+                    return deduped
+                return None  # API succeeded but no results
+            # No results: store negative cache tombstone
+            _store_negative_cache(keyword)
+            return None
         except ImportError:
             return None
+        except RuntimeError as e:
+            # Extract detail from chained exception for actionable messages
+            cause = e.__cause__
+            detail = str(cause) if cause else str(e)
+            if attempt <= retries:
+                _warn(f"Wikidata API retry {attempt}/{retries} for '{keyword}': {detail}")
+                time.sleep(2.0)
+            else:
+                _warn(f"Wikidata API query failed for '{keyword}': {detail}")
+                _last_api_failure = time.time()
+                return None
         except Exception as e:
             if attempt <= retries:
-                import time
                 _warn(f"Wikidata API retry {attempt}/{retries} for '{keyword}': {e}")
                 time.sleep(2.0)
             else:
                 _warn(f"Wikidata API query failed for '{keyword}': {e}")
+                _last_api_failure = time.time()
                 return None
     return None
+
+
+# ── Negative cache (tombstone for "no results") ─────────────────────────
+
+
+def _store_negative_cache(keyword: str, ttl_seconds: int = 3600) -> None:
+    """Store a tombstone entry so repeated lookups for the same keyword
+    skip the API until the TTL expires."""
+    db = _get_db()
+    expiry = (datetime.now(timezone.utc).timestamp() + ttl_seconds)
+    db.execute(
+        """INSERT OR REPLACE INTO semantika_cache
+           (keyword, property_id, label_en, description, source, fetched_at)
+           VALUES (?, '_NEGATIVE_', '', '', 'negative_cache', ?)""",
+        (keyword, expiry),
+    )
+
+
+def _check_negative_cache(keyword: str) -> bool:
+    """Check if a keyword has a negative cache entry that hasn't expired."""
+    db = _get_db()
+    row = db.execute_one(
+        "SELECT fetched_at FROM semantika_cache WHERE keyword = ? AND property_id = '_NEGATIVE_'",
+        (keyword,),
+    )
+    if row:
+        try:
+            expiry = float(row["fetched_at"])
+            return time.time() < expiry
+        except (ValueError, TypeError):
+            pass
+    return False
 
 
 # ── Cache storage ────────────────────────────────────────────────────────────
