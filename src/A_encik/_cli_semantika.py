@@ -56,7 +56,7 @@ def _print_semantika_kategorio(kategorio: str) -> None:
     )
     table.add_column("LIGILO", style="cyan", no_wrap=True)
     table.add_column(tr_multi("PRISKRIBO", "Description"), style="white")
-    table.add_column(tr_multi("ALIAZOJ", "Aliases"), style="dim")
+    table.add_column(tr_multi("ALIAZOJ", "Aliases"))
     for row in rows:
         ligilo = str(row.get("ligilo") or "")
         priskribo = str(row.get("priskribo") or "") or "-"
@@ -283,7 +283,7 @@ def semantika_ls() -> None:
     )
     table.add_column(tr_multi("Grupo", "Group"), style="cyan", no_wrap=True)
     table.add_column(tr_multi("Eniroj", "Entries"), justify="right")
-    table.add_column(tr_multi("Dosiero", "File"), style="dim")
+    table.add_column(tr_multi("Dosiero", "File"))
     for name in sorted(groups.keys()):
         path = semantika_group_file(name)
         rows = groups[name]

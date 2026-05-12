@@ -293,9 +293,9 @@ def print_candidates_table(
 
     Uses :func:`entry_locale_title` for the title column.
     """
-    table = Table(show_header=True, header_style="dim", box=None)
-    table.add_column("#", style="dim", width=3)
-    table.add_column("UUID", style="dim", width=10)
+    table = Table(show_header=True, box=None)
+    table.add_column("#", width=3)
+    table.add_column("UUID", width=10)
     table.add_column("Titolo")
     for i, entry in enumerate(candidates, 1):
         display_title = entry_locale_title(entry, preferred_langs=preferred_langs)

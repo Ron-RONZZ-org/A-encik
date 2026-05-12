@@ -72,8 +72,8 @@ def register_commands(app: typer.Typer) -> None:
         end = min(offset + per_pagho, total)
         console.print(f"[dim]{tr_multi('Montras', 'Showing')} {start}-{end} {tr_multi('el', 'of')} {total} {tr_multi('eniro(j)', 'entry(ies)')} | {tr_multi('Paĝo', 'Page')} {pagho}/{total_pages}[/dim]")
 
-        table = Table(show_header=True, header_style="dim", border_style="dim", expand=False)
-        table.add_column("UUID", style="dim", width=10, no_wrap=True)
+        table = Table(show_header=True, expand=False)
+        table.add_column("UUID", width=10, no_wrap=True)
         table.add_column(tr_multi("Titolo", "Title"), min_width=30)
         table.add_column(tr_multi("Kreita", "Created"), width=12)
         table.add_column(tr_multi("Modifita", "Modified"), width=12)

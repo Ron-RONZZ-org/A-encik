@@ -389,7 +389,6 @@ def display_entry_panel(
         "\n".join(lines),
         title=f"[bold]{panel_title_text}[/bold]",
         expand=False,
-        border_style="dim",
     )
     console.print(panel)
 
