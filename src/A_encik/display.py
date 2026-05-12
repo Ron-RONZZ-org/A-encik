@@ -381,9 +381,13 @@ def display_entry_panel(
         lines.append(f"  [dim]{'kreita:':<{LW}}[/dim] {(entry.get('kreita_je') or '')[:10]}")
         lines.append(f"  [dim]{'modifita:':<{LW}}[/dim] {(entry.get('modifita_je') or '')[:10]}")
 
+    panel_title_text = render_markdown_text(title)
+    max_title_w = console.width - 6
+    if len(panel_title_text) > max_title_w:
+        panel_title_text = panel_title_text[:max_title_w] + "…"
     panel = Panel(
         "\n".join(lines),
-        title=f"[bold]{render_markdown_text(title)}[/bold]",
+        title=f"[bold]{panel_title_text}[/bold]",
         expand=False,
         border_style="dim",
     )
