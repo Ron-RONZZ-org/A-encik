@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS encik (
     semantika   TEXT NOT NULL DEFAULT '[]',
     ligiloj     TEXT NOT NULL DEFAULT '[]',
     kreita_je   TEXT NOT NULL,
-    modifita_je TEXT NOT NULL
+    modifita_je TEXT NOT NULL,
+    titolo_fold TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -110,6 +111,23 @@ def migrate_db(db: SQLiteDB) -> None:
         db.execute(
             "ALTER TABLE encik ADD COLUMN ligiloj TEXT NOT NULL DEFAULT '[]'"
         )
+    if "titolo_fold" not in cols:
+        db.execute(
+            "ALTER TABLE encik ADD COLUMN titolo_fold TEXT NOT NULL DEFAULT ''"
+        )
+        # Populate for existing entries
+        from A.utils.normalize import fold_search_text as _fold
+        rows = db.execute("SELECT uuid, titolo FROM encik")
+        for r in rows:
+            folded = _fold(r["titolo"])
+            db.execute(
+                "UPDATE encik SET titolo_fold = ? WHERE uuid = ?",
+                (folded, r["uuid"]),
+            )
+    # Create index after ensuring column exists
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_encik_titolo_fold ON encik(titolo_fold)"
+    )
 
 
 def row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
@@ -130,7 +148,10 @@ def row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
             try:
                 d[field] = json.loads(d[field])
             except (json.JSONDecodeError, ValueError):
-                d[field] = {} if field != "semantika" else []
+                if field == "semantika":
+                    pass  # Keep raw string — custom format, not JSON
+                else:
+                    d[field] = {}
     # Backward compatibility
     if "fonto" not in d and "source" in d:
         d["fonto"] = d.get("source") or []

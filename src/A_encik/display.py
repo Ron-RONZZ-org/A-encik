@@ -56,6 +56,39 @@ def render_entry_html(
     if modified:
         rows.append(f'<p class="meta">Modifita: {modified[:19]}</p>')
 
+    # --- Semantika: custom string format → arc/value lines ---
+    sem_raw = entry.get("semantika") or ""
+    if isinstance(sem_raw, str) and sem_raw.strip() and sem_raw != "[]":
+        import re as _re
+        sem_rows: list[str] = []
+        for _s_line in sem_raw.strip().split("\n"):
+            _s_line = _s_line.strip()
+            if not _s_line:
+                continue
+            m = _re.match(
+                r'(str|int|float|bool)\s+(\S+)\s+(?:"([^"]*)"|(\S+))(?:\s+#(\S+))?',
+                _s_line,
+            )
+            if m:
+                _typ, _arc, _qv, _uv, _unit = m.groups()
+                _val = _escape_html(_qv if _qv is not None else _uv)
+                _line = f"<li><code>{_escape_html(_arc)}</code> {_val}</li>"
+                sem_rows.append(_line)
+        if sem_rows:
+            rows.append(f'<div class="field"><label>semantiko</label><div class="field-content"><ul>{"".join(sem_rows)}</ul></div></div>')
+
+    # --- Ligilo: show as {tipo} {target entry} ---
+    lig_raw = entry.get("ligilo") or []
+    if isinstance(lig_raw, list):
+        from A_encik.display_helpers import display_ligilo_items
+        _lig_items = display_ligilo_items(entry)
+        if _lig_items:
+            lig_rows = [
+                f"<li><code>{_escape_html(it['tipo'] or '')}</code> {_escape_html(it.get('titolo', '') or '')}  <span class=\"uuid\">#{_escape_html(it['uuid'][:8])}</span></li>"
+                for it in _lig_items
+            ]
+            rows.append(f'<div class="field"><label>ligilo</label><div class="field-content"><ul>{"".join(lig_rows)}</ul></div></div>')
+
     # Render content fields (skip header fields and suppressions)
     for key, value in entry.items():
         if key in PLAIN_FIELDS:
@@ -67,6 +100,9 @@ def render_entry_html(
             if entry.get(richer):  # dict/list — truthy check
                 continue
         if include_fields and key not in include_fields:
+            continue
+        # Skip ligilo/semantika — already rendered above
+        if key in ("ligilo", "semantika", "ligiloj", "titolo_fold"):
             continue
 
         field_html = _render_field(key, value)
@@ -297,21 +333,11 @@ def display_entry_panel(
 
     ligilo_items = display_ligilo_items(entry)
     if ligilo_items:
-        grouped: dict[str, list[dict]] = {}
         for item in ligilo_items:
             tipo = item.get("tipo") or ""
-            if tipo not in grouped:
-                grouped[tipo] = []
-            grouped[tipo].append(item)
-
-        for tipo in sorted(grouped, key=lambda t: _sem_rank(t)):
-            items = grouped[tipo]
-            items.sort(key=lambda x: (x.get("titolo") or "").lower())
-            desc = _semantika_description(tipo) or tipo
-            for item in items:
-                linked_title = item.get("titolo") or tr_multi("ne trovita", "not found", "non trouvé")
-                linked_uuid = item["uuid"][:8]
-                lines.append(f"  [dim]{desc:<{LW}}[/dim] {linked_title}  [dim]#{linked_uuid}[/dim]")
+            linked_title = item.get("titolo") or tr_multi("ne trovita", "not found", "non trouvé")
+            linked_uuid = item["uuid"][:8]
+            lines.append(f"  [dim]{tipo:<{LW}}[/dim] {linked_title}  [dim]#{linked_uuid}[/dim]")
 
     fonto = entry.get("fonto") or []
     if isinstance(fonto, str):
@@ -349,19 +375,41 @@ def display_entry_panel(
 
     semantika = entry.get("semantika") or []
     if isinstance(semantika, str):
-        semantika = [semantika]
-    if semantika:
+        # Parse custom format: "str wdt:P498 \"USD\"\nint wdt:P571 1792"
+        import re as _re
+        parsed = []
+        for _s_line in semantika.strip().split("\n"):
+            _s_line = _s_line.strip()
+            if not _s_line:
+                continue
+            # Match: (type) (arc) (value) optional (#unit)
+            m = _re.match(
+                r'(str|int|float|bool)\s+(\S+)\s+(?:"([^"]*)"|(\S+))(?:\s+#(\S+))?',
+                _s_line,
+            )
+            if m:
+                _typ, _arc, _qv, _uv, _unit = m.groups()
+                _val = _qv if _qv is not None else _uv
+                _label = _arc
+                _line = f"    {_label:<{LW-4}} {_val}"
+                if _unit:
+                    _line += f"  [{_unit}]"
+                parsed.append(_line)
+        if parsed:
+            lines.append(f"  [dim]{'semantiko:':<{LW}}[/dim]")
+            lines.extend(parsed)
+    elif semantika:
         lines.append(f"  [dim]{'semantiko:':<{LW}}[/dim]")
         for item in (semantika if isinstance(semantika, list) else []):
             if isinstance(item, dict):
                 arko = str(item.get("arko") or "")
                 valoro = str(item.get("valoro") or "")
                 unuo = str(item.get("unuo") or "")
-                desc = _semantika_description(arko) or arko
-                line = f"    {desc}: {valoro}"
+                _label = arko
+                _line = f"    {_label:<{LW-4}} {valoro}"
                 if unuo:
-                    line += f" [{unuo}]"
-                lines.append(line)
+                    _line += f"  [{unuo}]"
+                lines.append(_line)
 
     datumo = entry.get("datumo") or {}
     if isinstance(datumo, str):
@@ -376,6 +424,17 @@ def display_entry_panel(
             data_rows = datumo[name]
             row_count = len(data_rows) if isinstance(data_rows, list) else 1
             lines.append(f"    {name}: {row_count} {tr_multi('vico(j)', 'row(s)')}")
+
+    # --- Ligilo (also render for HTML fallback via _render_field) ---
+    ligilo_raw = entry.get("ligilo") or []
+    if ligilo_raw and isinstance(ligilo_raw, list) and ligilo_items:
+        if not any("ligilo" in str(k) for k in entry.keys() if isinstance(k, str)):
+            pass  # Already rendered above via display_ligilo_items
+
+    # --- Semantiko fallback for HTML rendering ---
+    sem_raw = entry.get("semantika") or ""
+    if isinstance(sem_raw, str) and sem_raw.strip() and sem_raw != "[]":
+        pass  # Already rendered above if parsed; HTML render_entry_html handles it via _render_field
 
     if cxio:
         lines.append(f"  [dim]{'kreita:':<{LW}}[/dim] {(entry.get('kreita_je') or '')[:10]}")

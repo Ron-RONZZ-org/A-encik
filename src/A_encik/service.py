@@ -55,6 +55,8 @@ class EncikService(CRUDService):
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create with JSON serialization. FTS indexing handled by parent."""
+        from A.utils.normalize import fold_search_text as _fold
+        data["titolo_fold"] = _fold(data.get("titolo", ""))
         data = self._serialize(data)
         result = super().create(data)
         entry = self._deserialize_row(result)
@@ -63,6 +65,9 @@ class EncikService(CRUDService):
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update with JSON serialization. FTS reindexing handled by parent."""
+        from A.utils.normalize import fold_search_text as _fold
+        if "titolo" in data:
+            data["titolo_fold"] = _fold(data["titolo"])
         data = self._serialize(data)
         result = super().update(uuid, data)
         entry = self._deserialize_row(result)
@@ -137,13 +142,51 @@ class EncikService(CRUDService):
         return [self._deserialize_row(row) for row in rows]
 
     def find_by_titolo(self, titolo: str) -> dict[str, Any] | None:
-        """Find entry by case-insensitive title."""
+        """Find entry by case- and accent-insensitive title."""
+        from A.utils.normalize import fold_search_text as _fold
+        folded = _fold(titolo)
+        # Fast path: exact match (indexed via LOWER)
         row = self.db.execute_one(
             "SELECT * FROM encik WHERE LOWER(titolo) = LOWER(?)", (titolo,)
         )
-        if not row:
-            return None
-        return self._deserialize_row(row)
+        if row:
+            return self._deserialize_row(row)
+        # Accent-insensitive: use titolo_fold column
+        if folded:
+            row = self.db.execute_one(
+                "SELECT * FROM encik WHERE titolo_fold = ?", (folded,)
+            )
+            if row:
+                return self._deserialize_row(row)
+        return None
+
+    def search_like(
+        self,
+        query: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Search entries using LIKE (fallback), accent-insensitive."""
+        from A.utils.normalize import fold_search_text as _fold
+        folded = _fold(query)
+        # Accent-insensitive search via titolo_fold column
+        if folded:
+            rows = self.db.execute(
+                "SELECT * FROM encik WHERE titolo_fold LIKE ? LIMIT ?",
+                (f"%{folded}%", limit),
+            )
+            if rows:
+                return [self._deserialize_row(row) for row in rows]
+        # Fallback to raw LIKE
+        pattern = f"%{query}%"
+        rows = self.db.execute(
+            """
+            SELECT * FROM encik
+            WHERE titolo LIKE ? OR difinio LIKE ? OR enhavo LIKE ?
+            LIMIT ?
+            """,
+            (pattern, pattern, pattern, limit),
+        )
+        return [self._deserialize_row(row) for row in rows]
 
     def get_many(self, uuids: list[str]) -> dict[str, dict[str, Any]]:
         """Batch-resolve multiple UUIDs in a single query.
@@ -178,23 +221,6 @@ class EncikService(CRUDService):
     ) -> list[dict[str, Any]]:
         """Search entries using core FTS5 full-text search."""
         rows = super().search_fts(query, filters, order_by, limit, offset)
-        return [self._deserialize_row(row) for row in rows]
-
-    def search_like(
-        self,
-        query: str,
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        """Search entries using LIKE (fallback)."""
-        pattern = f"%{query}%"
-        rows = self.db.execute(
-            """
-            SELECT * FROM encik
-            WHERE titolo LIKE ? OR difinio LIKE ? OR enhavo LIKE ?
-            LIMIT ?
-            """,
-            (pattern, pattern, pattern, limit),
-        )
         return [self._deserialize_row(row) for row in rows]
 
     def count(self) -> int:
