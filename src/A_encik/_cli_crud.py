@@ -291,8 +291,15 @@ def register_commands(app: typer.Typer) -> None:
 
         service = get_service()
 
-        # Duplicate check with replace prompt
+        # Duplicate check: find by primary titolo or any terminologio value
         existing = service.find_by_titolo(parsed["titolo"])
+        if not existing:
+            for _lang, term in (parsed.get("terminologio") or {}).items():
+                if term and term != parsed["titolo"]:
+                    existing = service.find_by_titolo(term)
+                    if existing:
+                        break
+
         if existing:
             error(tr_multi(
                 f"Eniro '{parsed['titolo']}' jam ekzistas (#{existing['uuid'][:8]}).",
@@ -300,10 +307,10 @@ def register_commands(app: typer.Typer) -> None:
                 f"Entrée '{parsed['titolo']}' existe déjà (#{existing['uuid'][:8]}).",
             ))
             answer = typer.prompt(
-                tr_multi("Ĉu anstataŭigi? (j/N)", "Replace? (j/N)", "Remplacer ? (j/N)"),
-                default="n",
+                tr_multi("Ĉu ĝisdatigi? (J/n)", "Update? (J/n)", "Mettre à jour ? (J/n)"),
+                default="J",
             )
-            if answer.strip().lower() not in {"j", "jes", "y", "yes"}:
+            if answer.strip().lower() not in {"j", "jes", "y", "yes", ""}:
                 info(tr_multi("Nuligita.", "Cancelled.", "Annulé."))
                 return
             updated = service.update(existing["uuid"], parsed)
@@ -347,6 +354,16 @@ def register_commands(app: typer.Typer) -> None:
             ...,
             help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
         ),
+        dosiero: Optional[str] = typer.Option(
+            None,
+            "-D",
+            "--dosiero",
+            help=tr_multi(
+                "Nova .enc dosiero por rekta anstataŭigo",
+                "New .enc file for direct replacement",
+                "Nouveau fichier .enc pour remplacement direct",
+            ),
+        ),
         titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr_multi("Nova titolo", "New title", "Nouveau titre")),
         difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Nova difino", "New definition", "Nouvelle définition")),
         enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Nova enhavo", "New content", "Nouveau contenu")),
@@ -362,8 +379,39 @@ def register_commands(app: typer.Typer) -> None:
             "--semantika-kopii",
             help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
         ),
+        vidi: bool = typer.Option(
+            False,
+            "-v",
+            "--vidi",
+            help=tr_multi(
+                "Montri la modifitan nodon post konservado",
+                "Show the modified entry after saving",
+                "Afficher l'entrée modifiée après sauvegarde",
+            ),
+        ),
+        html: bool = typer.Option(
+            False,
+            "-H",
+            "--html",
+            help=tr_multi(
+                "Kun --vidi: montri kiel HTML en retumilo",
+                "With --vidi: show as HTML in browser",
+                "Avec --vidi: afficher en HTML dans le navigateur",
+            ),
+        ),
     ) -> None:
         """Modify a knowledge entry."""
+        if kopii and semantika_kopii:
+            error(tr_multi(
+                "Uzu nur unu el --kopii aŭ --semantika-kopii.",
+                "Use only one of --kopii or --semantika-kopii.",
+                "Utilisez un seul de --kopii ou --semantika-kopii.",
+            ))
+            raise typer.Exit(1)
+
+        if html and not vidi:
+            vidi = True
+
         service = get_service()
 
         entry = service.get(ref)
@@ -382,26 +430,81 @@ def register_commands(app: typer.Typer) -> None:
             error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
             raise typer.Exit(1)
 
-        data = {}
-        if titolo:
-            data["titolo"] = titolo
-        if difinio is not None:
-            data["difinio"] = difinio
-        if enhavo is not None:
-            data["enhavo"] = enhavo
+        # If --dosiero provided, parse .enc and do full replacement
+        if dosiero is not None:
+            enc_path = Path(dosiero).expanduser().resolve()
+            if not enc_path.exists():
+                error(tr_multi(
+                    f"Dosiero ne trovita: {enc_path}",
+                    f"File not found: {enc_path}",
+                    f"Fichier non trouvé: {enc_path}",
+                ))
+                raise typer.Exit(1)
+            if not enc_path.is_file():
+                error(tr_multi(
+                    f"Ne estas dosiero: {enc_path}",
+                    f"Not a file: {enc_path}",
+                    f"Ce n'est pas un fichier: {enc_path}",
+                ))
+                raise typer.Exit(1)
+
+            from A_encik.enc_format import parse_enc_file, validate_enc_entry
+            try:
+                parsed = parse_enc_file(enc_path)
+            except ValueError as exc:
+                error(str(exc))
+                raise typer.Exit(1)
+            errors = validate_enc_entry(parsed)
+            if errors:
+                for e in errors:
+                    error(f"Validiga eraro: {e}")
+                raise typer.Exit(1)
+            data = parsed
+        else:
+            data = {}
+            if titolo:
+                data["titolo"] = titolo
+            if difinio is not None:
+                data["difinio"] = difinio
+            if enhavo is not None:
+                data["enhavo"] = enhavo
 
         if not data:
-            info(tr_multi("Neniuj sxangoj", "No changes", "Aucun changement"))
+            info(tr_multi("Neniuj ŝanĝoj", "No changes", "Aucun changement"))
             return
 
         updated = service.update(entry["uuid"], data)
-        info(tr_multi(f"Modifikis {updated['titolo']}", f"Modified {updated['titolo']}", f"Modifie {updated['titolo']}"))
+        if dosiero is not None:
+            info(tr_multi(
+                f"Anstataŭigis {data.get('titolo', entry['titolo'])}",
+                f"Replaced {data.get('titolo', entry['titolo'])}",
+                f"Remplacé {data.get('titolo', entry['titolo'])}",
+            ))
+        else:
+            info(tr_multi(
+                f"Modifikis {updated['titolo']}",
+                f"Modified {updated['titolo']}",
+                f"Modifié {updated['titolo']}",
+            ))
+        console.print(f"[green]UUID:[/] {updated.get('uuid')}")
 
         if kopii or semantika_kopii:
             if kopii:
                 copy_to_clipboard(f"#{updated['uuid'][:8]}")
             if semantika_kopii:
                 copy_to_clipboard(f"[{updated['titolo']}](#{updated['uuid'][:8]})")
+
+        if vidi:
+            if html:
+                from A_encik.display import preview_entry
+                preview_entry(updated, open_browser=True)
+                info(tr_multi(
+                    "Malfermis en retumilo",
+                    "Opened in browser",
+                    "Ouvert dans le navigateur",
+                ))
+            else:
+                display_entry_panel(updated)
 
     @app.command("forigi")
     def forigi(

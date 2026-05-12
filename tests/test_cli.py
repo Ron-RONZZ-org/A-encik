@@ -151,6 +151,27 @@ class TestModifiCommand:
         result = runner.invoke(app, ["modifi", "nonexistent-uuid"])
         
         assert result.exit_code == 1
+    
+    def test_modifi_with_dosiero(self, runner, tmp_path):
+        """Test modifi with --dosiero .enc file replacement."""
+        # Create entry first
+        src = tmp_path / "src.enc"
+        src.write_text(
+            'terminologio.eo = "Origino"\ndifino.eo = "originala"\n',
+            encoding="utf-8",
+        )
+        r1 = runner.invoke(app, ["aldoni", str(src)])
+        assert r1.exit_code == 0
+        
+        # Replace with .enc via modifi
+        repl = tmp_path / "repl.enc"
+        repl.write_text(
+            'terminologio.eo = "Modifita"\ndifino.eo = "nova difino"\n',
+            encoding="utf-8",
+        )
+        r2 = runner.invoke(app, ["modifi", "Origino", "--dosiero", str(repl)])
+        assert r2.exit_code == 0
+        assert "anstataŭigis" in r2.output.lower() or "replaced" in r2.output.lower()
 
 
 class TestForigiCommand:
