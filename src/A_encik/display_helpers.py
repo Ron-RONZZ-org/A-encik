@@ -261,21 +261,36 @@ def display_ligilo_items(entry: dict) -> list[dict]:
             seen.add(parent_ref)
             items.append({"uuid": parent_ref, "tipo": "rdfs:subClassOf"})
 
-    # Resolve titles
+    # Resolve titles — batch full UUIDs in a single query, fall back to
+    # individual prefix lookups for short/incomplete UUIDs.
     from A_encik.service import get_service
 
     svc = get_service()
-    for item in items:
-        resolved = svc.get(item["uuid"])
-        if resolved:
-            item["titolo"] = entry_locale_title(resolved)
+    full_uuids = [it["uuid"] for it in items if len(it["uuid"]) >= 36]
+    short_uuids = [it["uuid"] for it in items if len(it["uuid"]) < 36]
+
+    resolved_map: dict[str, str] = {}
+    if full_uuids:
+        batch = svc.get_many(full_uuids)
+        for uid, entry in batch.items():
+            resolved_map[uid] = entry_locale_title(entry)
+
+    for short in short_uuids:
+        matches = svc.find_by_uuid_prefix(short)
+        if matches:
+            resolved_map[short] = entry_locale_title(matches[0])
+
+    # Also try individual fallback for full UUIDs that weren't found
+    for it in items:
+        uid = it["uuid"]
+        if uid in resolved_map:
+            it["titolo"] = resolved_map[uid]
         else:
-            # Try prefix match
-            matches = svc.find_by_uuid_prefix(item["uuid"])
+            matches = svc.find_by_uuid_prefix(uid)
             if matches:
-                item["titolo"] = entry_locale_title(matches[0])
+                it["titolo"] = entry_locale_title(matches[0])
             else:
-                item["titolo"] = item["uuid"][:8]
+                it["titolo"] = uid[:8]
 
     return items
 

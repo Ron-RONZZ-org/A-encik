@@ -104,17 +104,13 @@ class EncikService(CRUDService):
 
     def get(self, uuid: str) -> dict[str, Any] | None:
         """Get entry with JSON deserialization and UUID prefix fallback."""
-        row = super().get(uuid)
-        if row:
-            return self._deserialize_row(row)
-        # Prefix match fallback
-        from A_encik.data.storage import get_db
-        db = get_db()
-        row = db.execute_one(
+        row = self.db.execute_one(
             "SELECT * FROM encik WHERE uuid LIKE ?",
             (f"{uuid}%",),
         )
-        return self._deserialize_row(row) if row else None
+        if row:
+            return self._deserialize_row(row)
+        return None
 
     def list(
         self,
@@ -148,6 +144,24 @@ class EncikService(CRUDService):
         if not row:
             return None
         return self._deserialize_row(row)
+
+    def get_many(self, uuids: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch-resolve multiple UUIDs in a single query.
+
+        Args:
+            uuids: List of full UUIDs (36 chars each) to resolve.
+
+        Returns:
+            Dict mapping each requested UUID to its deserialized entry,
+            or an empty dict if none are found. UUIDs not in the database
+            are omitted from the result.
+        """
+        if not uuids:
+            return {}
+        placeholders = ", ".join(["?"] * len(uuids))
+        sql = f"SELECT * FROM encik WHERE uuid IN ({placeholders})"
+        rows = self.db.execute(sql, tuple(uuids))
+        return {r["uuid"]: self._deserialize_row(r) for r in rows}
 
     def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
         """Find entries whose UUID starts with prefix (uses core CRUD method)."""
