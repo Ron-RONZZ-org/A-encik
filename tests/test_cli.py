@@ -83,25 +83,58 @@ class TestVidiCommand:
 class TestAldoniCommand:
     """Tests for aldoni command."""
     
-    def test_aldoni_requires_title(self, runner):
-        """Test aldoni requires titolo argument."""
+    def test_aldoni_requires_dosiero(self, runner):
+        """Test aldoni requires dosiero argument."""
         result = runner.invoke(app, ["aldoni"])
         
+        # Missing required arg → exit 2 (Typer/Click convention)
         assert result.exit_code == 2
     
-    def test_aldoni_basic(self, runner):
-        """Test basic aldoni."""
-        result = runner.invoke(app, ["aldoni", "CLI Test Title"])
+    def test_aldoni_file_not_found(self, runner):
+        """Test aldoni errors on non-existent file."""
+        result = runner.invoke(app, ["aldoni", "/nonexistent/path.enc"])
         
-        assert result.exit_code == 0
-        assert "UUID:" in result.output
+        assert result.exit_code == 1
+        assert "ne trovita" in result.output.lower() or "not found" in result.output.lower()
     
-    def test_aldoni_with_difino(self, runner):
-        """Test aldoni with difino."""
-        result = runner.invoke(app, ["aldoni", "Test Title", "--difino", "Test definition"])
+    def test_aldoni_with_enc_file(self, runner, tmp_path):
+        """Test aldoni with a valid .enc file."""
+        enc_path = tmp_path / "test.enc"
+        enc_path.write_text(
+            'terminologio.eo = "Testa"\n'
+            'difino.eo = "testa difino"\n',
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["aldoni", str(enc_path)])
         
         assert result.exit_code == 0
         assert "aldonis" in result.output.lower() or "added" in result.output.lower()
+        assert "UUID:" in result.output
+    
+    def test_aldoni_kopii_flag(self, runner, tmp_path):
+        """Test aldoni with --kopii flag."""
+        enc_path = tmp_path / "kopii_test.enc"
+        enc_path.write_text(
+            'terminologio.eo = "Kopii Test"\n'
+            'difino.eo = "testo por kopii"\n',
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["aldoni", str(enc_path), "-k"])
+        
+        assert result.exit_code == 0
+        
+    def test_aldoni_mutual_exclusion(self, runner, tmp_path):
+        """Test --kopii and --semantika-kopii cannot be used together."""
+        enc_path = tmp_path / "mutex_test.enc"
+        enc_path.write_text(
+            'terminologio.eo = "Mutual"\n'
+            'difino.eo = "ekskluziva"\n',
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["aldoni", str(enc_path), "-k", "-sk"])
+        
+        assert result.exit_code == 1
+        assert "unu el" in result.output.lower() or "only one" in result.output.lower()
 
 
 class TestModifiCommand:

@@ -152,7 +152,7 @@ def fix_unquoted_uuids(text: str) -> str:
     while i < len(text):
         ch = text[i]
         # Look for bare hex strings inside arrays
-        if ch in ("[", ","]:
+        if ch in ("[", ","):
             result.append(ch)
             i += 1
             # Skip whitespace

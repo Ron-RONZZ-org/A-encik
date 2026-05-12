@@ -165,55 +165,55 @@ def register_commands(app: typer.Typer) -> None:
         )
         display_entry_panel(entry, selected_lang=selected_lang, cxio=cxio)
 
-    @app.command(
-        "aldoni",
-        epilog=tr_multi(
-            "\n.enc formato (por --terminologio, --difino ktp):\n"
-            "  terminologio.eo = \"Termino\"\n"
-            "  terminologio.en = \"Term\"\n"
-            "  difino.eo = \"Difino\"\n"
-            "  difino.en = \"Definition\"\n"
-            "  enhavo = \"\"\"Plena enhavo...\"\"\"\n"
-            "  superklaso = [\"uuid1\", \"uuid2\"]\n"
-            "  ligilo = [\"uuid1\", [\"uuid2\", \"rdf:type\"]]\n"
-            "  fonto = [{titolo=\"...\", autoro=\"...\", jaro=2024, tipo=\"lib\"}]\n"
-            "  citajo = [{teksto=\"...\", autoro=\"...\", verko=\"...\"}]\n"
-            "  datumo.nomo = \"\"\"{...json...}\"\"\"\n"
-            "Vidu A-encik dokumentaron por plena .enc referenco.",
-            "\n.enc format (for --terminologio, --difino etc.):\n"
-            "  terminologio.eo = \"Term\"\n"
-            "  terminologio.en = \"Term\"\n"
-            "  difino.eo = \"Definition\"\n"
-            "  difino.en = \"Definition\"\n"
-            "  enhavo = \"\"\"Full content...\"\"\"\n"
-            "  superklaso = [\"uuid1\", \"uuid2\"]\n"
-            "  ligilo = [\"uuid1\", [\"uuid2\", \"rdf:type\"]]\n"
-            "  fonto = [{title=\"...\", author=\"...\", year=2024, type=\"book\"}]\n"
-            "  citajo = [{text=\"...\", author=\"...\", work=\"...\"}]\n"
-            "  datumo.name = \"\"\"{...json...}\"\"\"\n"
-            "See A-encik docs for full .enc reference.",
-            "\nFormat .enc (pour --terminologio, --difino etc.) :\n"
-            "  terminologio.eo = \"Terme\"\n"
-            "  terminologio.en = \"Term\"\n"
-            "  difino.eo = \"Definition\"\n"
-            "  difino.en = \"Definition\"\n"
-            "  enhavo = \"\"\"Contenu complet...\"\"\"\n"
-            "  superklaso = [\"uuid1\", \"uuid2\"]\n"
-            "  ligilo = [\"uuid1\", [\"uuid2\", \"rdf:type\"]]\n"
-            "  fonto = [{title=\"...\", author=\"...\", year=2024, type=\"book\"}]\n"
-            "  citajo = [{text=\"...\", author=\"...\", work=\"...\"}]\n"
-            "  datumo.nom = \"\"\"{...json...}\"\"\"\n"
-            "Voir documentation A-encik pour référence .enc complète.",
-        ),
-    )
+    @app.command("aldoni")
     def aldoni(
-        titolo: str = typer.Argument(..., help=tr_multi("Titolo aŭ .enc-dosiero", "Title or .enc file", "Titre ou fichier .enc")),
-        difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Difino", "Definition", "Definition")),
-        enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Enhavo", "Content", "Content")),
-        terminologio: Optional[str] = typer.Option(None, "-t", "--terminologio", help=tr_multi("Terminologio (JSON)", "Terminology (JSON)", "Terminologie (JSON)")),
-        superklaso: Optional[str] = typer.Option(None, "-s", "--superklaso", help=tr_multi("Superklaso UUIDoj (JSON)", "Superclass UUIDs (JSON)", "UUIDs de superclasse (JSON)")),
-        ligilo: Optional[str] = typer.Option(None, "-l", "--ligilo", help=tr_multi("Ligiloj (JSON)", "Links (JSON)", "Liens (JSON)")),
-        fonto: Optional[str] = typer.Option(None, "-f", "--fonto", help=tr_multi("Fontoj (JSON)", "Sources (JSON)", "Sources (JSON)")),
+        dosiero: str = typer.Argument(
+            ...,
+            help=tr_multi(
+                "Vojo al .enc dosiero.\n"
+                "Ekzemplo: encik aldoni ./fiziko/suno.enc\n"
+                "\n"
+                "Formato:\n"
+                '  terminologio.xx = "..."\n'
+                '  difino.xx = "..."\n'
+                '  """Plena enhavo..."""\n'
+                '  superklaso = ["uuid1", "uuid2"]\n'
+                '  ligilo = ["uuid1", ["uuid2", "rdf:type"]]\n'
+                '  fonto = [{titolo="...", autoro="...", jaro=2020, tipo="lib"}]\n'
+                '  citajo = [{teksto="...", autoro="...", verko="..."}]\n'
+                '  datumo.<nomo> = """{...json...}"""\n'
+                "  semantika = ...\n"
+                "Vidu A-encik dokumentaron por plena .enc referenco.",
+                "Path to .enc file.\n"
+                "Example: encik aldoni ./physics/sun.enc\n"
+                "\n"
+                "Format:\n"
+                '  terminologio.xx = "..."\n'
+                '  difino.xx = "..."\n'
+                '  """Full content..."""\n'
+                '  superklaso = ["uuid1", "uuid2"]\n'
+                '  ligilo = ["uuid1", ["uuid2", "rdf:type"]]\n'
+                '  fonto = [{title="...", author="...", year=2020, type="book"}]\n'
+                '  citajo = [{text="...", author="...", work="..."}]\n'
+                '  datumo.<name> = """{...json...}"""\n'
+                "  semantika = ...\n"
+                "See A-encik docs for full .enc reference.",
+                "Chemin vers fichier .enc.\n"
+                "Exemple : encik aldoni ./physique/soleil.enc\n"
+                "\n"
+                "Format :\n"
+                '  terminologio.xx = "..."\n'
+                '  difino.xx = "..."\n'
+                '  """Contenu complet..."""\n'
+                '  superklaso = ["uuid1", "uuid2"]\n'
+                '  ligilo = ["uuid1", ["uuid2", "rdf:type"]]\n'
+                '  fonto = [{title="...", author="...", year=2020, type="book"}]\n'
+                '  citajo = [{text="...", author="...", work="..."}]\n'
+                '  datumo.<nom> = """{...json...}"""\n'
+                "  semantika = ...\n"
+                "Voir documentation A-encik pour référence .enc complète.",
+            ),
+        ),
         kopii: bool = typer.Option(
             False,
             "-k",
@@ -226,50 +226,78 @@ def register_commands(app: typer.Typer) -> None:
             "--semantika-kopii",
             help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
         ),
+        vidi: bool = typer.Option(
+            False,
+            "-v",
+            "--vidi",
+            help=tr_multi(
+                "Montri la aldonitan nodon post konservado",
+                "Show the added entry after saving",
+                "Afficher l'entrée ajoutée après sauvegarde",
+            ),
+        ),
+        html: bool = typer.Option(
+            False,
+            "-H",
+            "--html",
+            help=tr_multi(
+                "Kun --vidi: montri kiel HTML en retumilo",
+                "With --vidi: show as HTML in browser",
+                "Avec --vidi: afficher en HTML dans le navigateur",
+            ),
+        ),
     ) -> None:
-        """Add a new knowledge entry."""
-        import json
+        """Aldoni novan nodon el .enc dosiero."""
+        if kopii and semantika_kopii:
+            error(tr_multi(
+                "Uzu nur unu el --kopii aŭ --semantika-kopii.",
+                "Use only one of --kopii or --semantika-kopii.",
+                "Utilisez un seul de --kopii ou --semantika-kopii.",
+            ))
+            raise typer.Exit(1)
+
+        if html and not vidi:
+            vidi = True
+
+        path = Path(dosiero).expanduser().resolve()
+        if not path.exists():
+            error(tr_multi(
+                f"Dosiero ne trovita: {path}",
+                f"File not found: {path}",
+                f"Fichier non trouvé: {path}",
+            ))
+            raise typer.Exit(1)
+        if not path.is_file():
+            error(tr_multi(
+                f"Ne estas dosiero: {path}",
+                f"Not a file: {path}",
+                f"Ce n'est pas un fichier: {path}",
+            ))
+            raise typer.Exit(1)
+
+        from A_encik.enc_format import parse_enc_file, validate_enc_entry
+
+        try:
+            parsed = parse_enc_file(path)
+        except ValueError as exc:
+            error(str(exc))
+            raise typer.Exit(1)
+
+        errors = validate_enc_entry(parsed)
+        if errors:
+            for e in errors:
+                error(f"Validiga eraro: {e}")
+            raise typer.Exit(1)
 
         service = get_service()
 
-        # Detect .enc file path — if the argument is a path to an existing
-        # .enc file, parse and import it (matching autish-legacy behaviour).
-        _enc_candidate = Path(titolo).expanduser().resolve()
-        if _enc_candidate.suffix == ".enc" and _enc_candidate.is_file():
-            from A_encik.enc_format import parse_enc_file, validate_enc_entry
-            try:
-                parsed = parse_enc_file(_enc_candidate)
-            except ValueError as exc:
-                error(str(exc))
-                raise typer.Exit(1)
-            errors = validate_enc_entry(parsed)
-            if errors:
-                for e in errors:
-                    error(f"Validiga eraro: {e}")
-                raise typer.Exit(1)
-            entry = service.create(parsed)
-            info(tr_multi(
-                f"Aldonis {parsed['titolo']}",
-                f"Added {parsed['titolo']}",
-                f"Ajoute {parsed['titolo']}",
-            ))
-            console.print(f"[green]UUID:[/] {entry.get('uuid')}")
-            if kopii or semantika_kopii:
-                if kopii:
-                    copy_to_clipboard(f"#{entry['uuid'][:8]}")
-                if semantika_kopii:
-                    copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
-            return
-
-        data: dict = {"titolo": titolo}
-
-        # Check for duplicate title (warn + prompt to replace, matching legacy)
-        existing = service.find_by_titolo(titolo)
+        # Duplicate check with replace prompt
+        existing = service.find_by_titolo(parsed["titolo"])
         if existing:
             error(tr_multi(
-                f"Eniro '{titolo}' jam ekzistas (#{existing['uuid'][:8]}).",
-                f"Entry '{titolo}' already exists (#{existing['uuid'][:8]}).",
-                f"Entrée '{titolo}' existe déjà (#{existing['uuid'][:8]}).",
+                f"Eniro '{parsed['titolo']}' jam ekzistas (#{existing['uuid'][:8]}).",
+                f"Entry '{parsed['titolo']}' already exists (#{existing['uuid'][:8]}).",
+                f"Entrée '{parsed['titolo']}' existe déjà (#{existing['uuid'][:8]}).",
             ))
             answer = typer.prompt(
                 tr_multi("Ĉu anstataŭigi? (j/N)", "Replace? (j/N)", "Remplacer ? (j/N)"),
@@ -278,54 +306,22 @@ def register_commands(app: typer.Typer) -> None:
             if answer.strip().lower() not in {"j", "jes", "y", "yes"}:
                 info(tr_multi("Nuligita.", "Cancelled.", "Annulé."))
                 return
-            # Update existing entry with provided fields (partial update)
-            updated = service.update(existing["uuid"], data)
-            info(tr_multi(f"Anstataŭigis {titolo}", f"Replaced {titolo}", f"Remplacé {titolo}"))
+            updated = service.update(existing["uuid"], parsed)
+            info(tr_multi(
+                f"Anstataŭigis {parsed['titolo']}",
+                f"Replaced {parsed['titolo']}",
+                f"Remplacé {parsed['titolo']}",
+            ))
             console.print(f"[green]UUID:[/] {updated.get('uuid')}")
-            if kopii or semantika_kopii:
-                if kopii:
-                    copy_to_clipboard(f"#{updated['uuid'][:8]}")
-                if semantika_kopii:
-                    copy_to_clipboard(f"[{updated['titolo']}](#{updated['uuid'][:8]})")
-            return
-        if difinio:
-            data["difinio"] = difinio
-        if enhavo:
-            data["enhavo"] = enhavo
-
-        if terminologio:
-            try:
-                data["terminologio"] = json.loads(terminologio)
-            except json.JSONDecodeError:
-                error(tr_multi("Nevalida JSON por terminologio", "Invalid JSON for terminologio", "JSON nevalida por terminologio"))
-                raise typer.Exit(1)
+            entry = updated
         else:
-            data["terminologio"] = {"eo": titolo}
-
-        if superklaso:
-            try:
-                data["superklaso"] = json.loads(superklaso)
-            except json.JSONDecodeError:
-                error(tr_multi("Nevalida JSON por superklaso", "Invalid JSON for superklaso", "JSON nevalida por superklaso"))
-                raise typer.Exit(1)
-
-        if ligilo:
-            try:
-                data["ligilo"] = json.loads(ligilo)
-            except json.JSONDecodeError:
-                error(tr_multi("Nevalida JSON por ligilo", "Invalid JSON for ligilo", "JSON nevalida por ligilo"))
-                raise typer.Exit(1)
-
-        if fonto:
-            try:
-                data["fonto"] = json.loads(fonto)
-            except json.JSONDecodeError:
-                error(tr_multi("Nevalida JSON por fonto", "Invalid JSON for fonto", "JSON nevalida por fonto"))
-                raise typer.Exit(1)
-
-        entry = service.create(data)
-        info(tr_multi(f"Aldonis {titolo}", f"Added {titolo}", f"Ajoute {titolo}"))
-        console.print(f"[green]UUID:[/] {entry.get('uuid')}")
+            entry = service.create(parsed)
+            info(tr_multi(
+                f"Aldonis {parsed['titolo']}",
+                f"Added {parsed['titolo']}",
+                f"Ajoute {parsed['titolo']}",
+            ))
+            console.print(f"[green]UUID:[/] {entry.get('uuid')}")
 
         if kopii or semantika_kopii:
             if kopii:
@@ -333,15 +329,27 @@ def register_commands(app: typer.Typer) -> None:
             if semantika_kopii:
                 copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
 
+        if vidi:
+            if html:
+                from A_encik.display import preview_entry
+                preview_entry(entry, open_browser=True)
+                info(tr_multi(
+                    "Malfermis en retumilo",
+                    "Opened in browser",
+                    "Ouvert dans le navigateur",
+                ))
+            else:
+                display_entry_panel(entry)
+
     @app.command("modifi")
     def modifi(
         ref: str = typer.Argument(
             ...,
             help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
         ),
-        titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr_multi("Nova titolo", "New title", "New title")),
-        difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Nova difino", "New definition", "New definition")),
-        enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Nova enhavo", "New content", "New content")),
+        titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr_multi("Nova titolo", "New title", "Nouveau titre")),
+        difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Nova difino", "New definition", "Nouvelle définition")),
+        enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Nova enhavo", "New content", "Nouveau contenu")),
         kopii: bool = typer.Option(
             False,
             "-k",
@@ -405,7 +413,7 @@ def register_commands(app: typer.Typer) -> None:
             False,
             "--hard",
             "-H",
-            help=tr_multi("Suppression permanente", "Permanent delete (no trash)", "Suppression définitive (pas de corbeille)"),
+            help=tr_multi("Forigi permanente (preterrubujo)", "Permanent delete (no trash)", "Suppression définitive (pas de corbeille)"),
         ),
     ) -> None:
         """Delete knowledge entries."""
