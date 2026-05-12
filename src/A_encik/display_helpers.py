@@ -323,6 +323,32 @@ def print_candidates_table(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def strip_title_disambiguation(title: str) -> str:
+    """Remove parenthesized disambiguation text from a title.
+
+    Strips ``(...)`` content recursively (handles nested parens)
+    and collapses multiple spaces. Used when building clipboard references
+    so that ``Francio (lando en Eŭropo)`` becomes ``Francio``.
+
+    Examples:
+        >>> strip_title_disambiguation("Francio (lando en Eŭropo)")
+        'Francio'
+        >>> strip_title_disambiguation("Atomo (fiziko (partiklo))")
+        'Atomo'
+    """
+    base = str(title or "").strip()
+    if not base:
+        return ""
+    cleaned = base
+    while True:
+        updated = re.sub(r"\([^()]*\)", " ", cleaned)
+        if updated == cleaned:
+            break
+        cleaned = updated
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned or base
+
+
 def copy_entry_reference(
     entry: dict,
     *,
@@ -331,11 +357,11 @@ def copy_entry_reference(
     """Copy entry reference to clipboard.
 
     Simple: copies ``#xxxxxxxx`` (8-char UUID).
-    Semantika: copies ``[titolo](#xxxxxxxx)``.
+    Semantika: copies ``[titolo](#xxxxxxxx)`` with disambiguation stripped.
     """
     uid = entry.get("uuid", "")[:8]
     if semantika:
-        title = entry_locale_title(entry)
+        title = strip_title_disambiguation(entry_locale_title(entry))
         copy_to_clipboard(f"[{title}](#{uid})")
     else:
         copy_to_clipboard(f"#{uid}")
@@ -355,6 +381,7 @@ __all__ = [
     "display_ligilo_items",
     "print_candidates_table",
     "copy_entry_reference",
+    "strip_title_disambiguation",
     "_sem_rank",
     "_semantika_description",
 ]
