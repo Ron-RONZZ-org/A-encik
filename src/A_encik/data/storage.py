@@ -75,16 +75,17 @@ def _repair_if_corrupted() -> bool:
         if _conn is not None:
             _conn.close()
 
-    # DB is corrupted — try VACUUM (rebuilds file without losing data)
     from A import warning as _w
-    _w("Datumbazo ŝajnas difektita. Provas VACUUM-riparon...")
+
+    # Try 1: VACUUM (rebuilds main DB file)
+    _w("Provas VACUUM-riparon...")
     _conn = None
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
         _conn.execute("VACUUM")
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
         if _result == "ok":
-            _w("VACUUM sukcesis — datumbazo riparita.")
+            _w("VACUUM sukcesis.")
             return True
     except Exception:
         pass
@@ -92,13 +93,34 @@ def _repair_if_corrupted() -> bool:
         if _conn is not None:
             _conn.close()
 
-    _w("VACUUM malsukcesis. Provas rekonstruon per backup/restore...")
+    # Try 2: Delete WAL+SHM files (often the culprit — the main DB
+    # file itself may be fine, only the write-ahead log is corrupt).
+    _w("Forigas WAL-ŝutdaton...")
+    for _suffix in ("-wal", "-shm"):
+        _p = _DB_FILE.with_name(_DB_FILE.name + _suffix)
+        _p.unlink(missing_ok=True)
+    _conn = None
+    try:
+        _conn = sqlite3.connect(str(_DB_FILE))
+        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+        if _result == "ok":
+            # Trigger a clean checkpoint to recreate WAL
+            _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            _w("WAL forigita — datumbazo riparita.")
+            return True
+    except Exception:
+        pass
+    finally:
+        if _conn is not None:
+            _conn.close()
+
+    # Try 3: sqlite3.backup() — clean copy
+    _w("Provas rekonstruon per backup/restore...")
     _conn = _bak_conn = None
     try:
-        _bak = _DB_FILE.with_suffix(".db.vacuumed")
+        _bak = _DB_FILE.with_suffix(".db.recovered")
         _conn = sqlite3.connect(str(_DB_FILE))
         _bak_conn = sqlite3.connect(str(_bak))
-        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         _conn.backup(_bak_conn)
         _bak_conn.close()
         _conn.close()
