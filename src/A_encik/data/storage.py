@@ -52,31 +52,57 @@ def ensure_dirs() -> None:
 def get_db() -> SQLiteDB:
     """Get database connection."""
     ensure_dirs()
+
+    # Check for corruption before opening: if the DB file is malformed,
+    # back it up and start fresh. This can happen after a failed FTS
+    # index operation or system crash.
+    _db_exists = _DB_FILE.exists()
+    if _db_exists:
+        try:
+            _check = sqlite3.connect(str(_DB_FILE))
+            _check.execute("PRAGMA quick_check").fetchone()
+            _check.close()
+        except Exception:
+            # Corrupted — recover by recreating
+            _check.close()
+            import shutil
+            _bak = _DB_FILE.with_suffix(".db.bak")
+            shutil.copy2(str(_DB_FILE), str(_bak))
+            _DB_FILE.unlink(missing_ok=True)
+            for _suffix in ("-wal", "-shm"):
+                _p = _DB_FILE.with_name(_DB_FILE.name + _suffix)
+                _p.unlink(missing_ok=True)
+            from A import warning as _w
+            _w(f"Datumbazo riparita. Malnova konservita kiel: {_bak}")
+
     db = SQLiteDB(_DB_FILE)
+
+    # If the FTS table has wrong columns (schema changed), drop it first
+    # using a fresh connection to avoid WAL state conflicts with the
+    # cached connection that will be used for subsequent DDL.
+    _fts_name = ENCIK_FTS_CONFIG.fts_table
+    if _DB_FILE.exists():
+        try:
+            _fts_row = db.execute_one(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (_fts_name,)
+            )
+            if _fts_row:
+                _fts_sql = _fts_row.get("sql", "")
+                _expected = set(ENCIK_FTS_CONFIG.fts_columns)
+                _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
+                if _actual != _expected:
+                    with db.raw_connection() as _raw:
+                        _raw.execute(f"DROP TABLE IF EXISTS {_fts_name}")
+                        _raw.commit()
+        except Exception:
+            pass  # Will be created fresh if table doesn't exist
+
     db.execute(_CREATE_ENCIK)
     for stmt in _CREATE_ENCIK_INDEXES.strip().split(";"):
         if stmt.strip():
             db.execute(stmt)
     migrate_db(db)
-    # After migration, ensure FTS table columns match the config.
-    # FTS5 virtual tables can't be altered, so if columns changed
-    # we must drop and recreate via _rebuild_fts.
-    _fts_name = ENCIK_FTS_CONFIG.fts_table
-    _fts_row = db.execute_one(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (_fts_name,)
-    )
-    if _fts_row:
-        _fts_sql = _fts_row.get("sql", "")
-        _expected = set(ENCIK_FTS_CONFIG.fts_columns)
-        _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
-        if _actual != _expected:
-            # Columns mismatch — use a fresh connection to drop FTS.
-            # The cached connection may have pending WAL state from
-            # earlier DDL (CREATE TABLE, indexes, ALTER TABLE) that
-            # interferes with FTS5 virtual table operations.
-            with db.raw_connection() as _raw:
-                _raw.execute(f"DROP TABLE IF EXISTS {_fts_name}")
-                _raw.commit()
     # Init semantika cache table (lazy import avoids circular dep)
     from A_encik.data.semantika_cache import init_cache_table as _init_cache
     _init_cache(db)
