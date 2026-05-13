@@ -96,7 +96,7 @@ def register_commands(app: typer.Typer) -> None:
             False,
             "-sk",
             "--semantika-kopii",
-            help=tr_multi("Kopii [titolo](#uuid) al tondujo", "Copy [titolo](#uuid) to clipboard", "Copier [titolo](#uuid) dans le presse-papier"),
+            help=tr_multi("Kopii [terminologio.uzantLingvo](#uuid) al tondujo", "Copy [title in user language](#uuid) to clipboard", "Copier [titre dans la langue de l'utilisateur](#uuid) dans le presse-papier"),
         ),
         vidi: bool = typer.Option(
             False,
@@ -247,7 +247,7 @@ def register_commands(app: typer.Typer) -> None:
             if kopii:
                 copy_to_clipboard(f"#{entry['uuid'][:8]}")
             if semantika_kopii:
-                copy_to_clipboard(f"[{entry['titolo']}](#{entry['uuid'][:8]})")
+                copy_entry_reference(entry, semantika=True)
 
         if vidi:
             if html:

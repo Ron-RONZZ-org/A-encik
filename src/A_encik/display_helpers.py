@@ -70,10 +70,11 @@ def entry_locale_title(
     Priority:
     1. Explicit *preferred_langs* (from ``--lingvo``)
     2. Environment language (LC_ALL/LANG)
-    3. ``"eo"``
-    4. ``"en"``
-    5. ``entry["titolo"]``
-    6. First available terminologio value
+    3. A-core config language (set via ``uzanto`` or ``config.toml``)
+    4. ``"eo"``
+    5. ``"en"``
+    6. ``entry["titolo"]``
+    7. First available terminologio value
 
     Examples:
         >>> entry_locale_title({"titolo": "Test", "terminologio": {"eo": "testo"}})
@@ -90,6 +91,15 @@ def entry_locale_title(
     env_lang = raw_env.split(".")[0].split("_")[0].lower()
     if env_lang and term.get(env_lang):
         return str(term[env_lang])
+
+    # A-core config language (user locale preference)
+    try:
+        from A.core.config import load_config
+        cfg_lang = load_config().language
+        if cfg_lang and term.get(cfg_lang):
+            return str(term[cfg_lang])
+    except Exception:
+        pass
 
     for lang in ("eo", "en"):
         if term.get(lang):
