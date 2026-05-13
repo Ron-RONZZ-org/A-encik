@@ -105,7 +105,13 @@ def render_entry_html(
         if key in ("ligilo", "semantika", "ligiloj", "titolo_fold"):
             continue
 
-        # Resolve inline semantic arcs before markdown rendering
+        # Skip empty string values (e.g. empty enhavo)
+        if isinstance(value, str) and not value:
+            continue
+
+        # Resolve inline semantic arcs before markdown rendering.
+        # For dict values (difinoj, terminologio), each string entry
+        # is resolved inside _render_field before markdown rendering.
         if isinstance(value, str) and key not in PLAIN_FIELDS:
             value = _resolve_inline_links(value, link_depth=0)
 
@@ -144,37 +150,39 @@ def _render_field(key: str, value: Any) -> str:
     if value is None:
         return ""
 
+    # Resolve inline semantic arcs in a string before markdown rendering.
+    def _resolve(v: str) -> str:
+        return _resolve_inline_links(v, link_depth=0) if v else v
+
     # Handle different field types
     if isinstance(value, str):
+        md_text = _resolve(value) if key in MARKDOWN_FIELDS else value
         if key in MARKDOWN_FIELDS:
-            # Render markdown
-            return f'<div class="field-content">{render_markdown(value)}</div>'
+            return f'<div class="field-content">{render_markdown(md_text)}</div>'
         else:
-            # Plain text
             return f'<div class="field-content">{_escape_html(value)}</div>'
 
     elif isinstance(value, dict):
-        # Render as key-value list, rendering markdown for MARKDOWN_FIELDS
         items = []
         use_markdown = key in MARKDOWN_FIELDS
 
         if key == "terminologio":
-            # Group identical terms across languages: {term: [langs...]}
             groups: dict[str, list[str]] = {}
             for lang, term in value.items():
                 term_str = str(term).strip() if term else ""
                 if term_str:
                     groups.setdefault(term_str, []).append(lang)
             for term_str, langs in sorted(groups.items(),
-                                          key=lambda x: x[1][0]):  # sort by first lang
+                                          key=lambda x: x[1][0]):
                 lang_label = "/".join(langs)
-                rendered = render_markdown(term_str) if use_markdown else _escape_html(term_str)
+                t = _resolve(term_str) if use_markdown else term_str
+                rendered = render_markdown(t) if use_markdown else _escape_html(term_str)
                 items.append(f"<li><strong>{_escape_html(lang_label)}</strong>: {rendered}</li>")
         else:
             for k, v in value.items():
                 if v:
                     if use_markdown and isinstance(v, str):
-                        rendered = render_markdown(v)
+                        rendered = render_markdown(_resolve(v))
                     else:
                         rendered = _escape_html(str(v))
                     items.append(f"<li><strong>{_escape_html(str(k))}</strong>: {rendered}</li>")
@@ -184,10 +192,15 @@ def _render_field(key: str, value: Any) -> str:
         return ""
 
     elif isinstance(value, list):
-        # Render as list
-        items = [_escape_html(str(v)) for v in value if v]
+        items = []
+        for v in value:
+            if v:
+                if isinstance(v, str) and key in MARKDOWN_FIELDS:
+                    items.append(f"<li>{render_markdown(_resolve(v))}</li>")
+                else:
+                    items.append(f"<li>{_escape_html(str(v))}</li>")
         if items:
-            return f'<div class="field-content"><ul>{"".join(f"<li>{i}</li>" for i in items)}</ul></div>'
+            return f'<div class="field-content"><ul>{"".join(items)}</ul></div>'
         return ""
 
     else:
