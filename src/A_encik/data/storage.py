@@ -138,6 +138,8 @@ def migrate_db(db: SQLiteDB) -> None:
                 "UPDATE encik SET terminologio_search = ? WHERE uuid = ?",
                 (folded, r["uuid"]),
             )
+        # FTS table has old columns (titolo) — drop and recreate
+        db.execute("DROP TABLE IF EXISTS encik_fts")
     # Create index after ensuring column exists
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_encik_terminologio_search ON encik(terminologio_search)"
