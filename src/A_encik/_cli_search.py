@@ -140,6 +140,18 @@ def register_commands(app: typer.Typer) -> None:
         entry = service.get(demando)
         if not entry:
             entry = service.find_by_titolo(demando)
+            # If the match is accent-different (e.g. "stato" → "ŝtato"),
+            # treat it as a search result, not a perfect match.
+            if entry:
+                from A.utils.normalize import fold_search_text as _fold
+                query_lower = demando.lower()
+                title_lower = entry.get("titolo", "").lower()
+                _query_folded = _fold(demando)
+                _title_folded = _fold(entry.get("titolo", ""))
+                # Perfect match only if same lowercase (accents match)
+                if query_lower != title_lower:
+                    # Accent-different — push into search flow below
+                    entry = None
         if not entry:
             matches = service.find_by_uuid_prefix(demando)
             if len(matches) == 1:
