@@ -61,31 +61,39 @@ def _repair_if_corrupted() -> bool:
     """
     if not _DB_FILE.exists():
         return False
+
+    _conn = None
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
         _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        _conn.close()
         if _result == "ok":
             return False
     except Exception:
-        _conn.close()
+        pass
+    finally:
+        if _conn is not None:
+            _conn.close()
 
     # DB is corrupted — try VACUUM (rebuilds file without losing data)
     from A import warning as _w
     _w("Datumbazo ŝajnas difektita. Provas VACUUM-riparon...")
+    _conn = None
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
         _conn.execute("VACUUM")
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        _conn.close()
         if _result == "ok":
             _w("VACUUM sukcesis — datumbazo riparita.")
             return True
     except Exception:
-        _conn.close()
+        pass
+    finally:
+        if _conn is not None:
+            _conn.close()
 
     _w("VACUUM malsukcesis. Provas rekonstruon per backup/restore...")
+    _conn = _bak_conn = None
     try:
         _bak = _DB_FILE.with_suffix(".db.vacuumed")
         _conn = sqlite3.connect(str(_DB_FILE))
@@ -94,15 +102,19 @@ def _repair_if_corrupted() -> bool:
         _conn.backup(_bak_conn)
         _bak_conn.close()
         _conn.close()
-        # Replace corrupted with repaired copy
         import shutil
         shutil.move(str(_bak), str(_DB_FILE))
         _w("Rekonstruo sukcesis.")
         return True
     except Exception:
-        pass
-
-    return False
+        return False
+    finally:
+        for _c in (_conn, _bak_conn):
+            if _c is not None:
+                try:
+                    _c.close()
+                except Exception:
+                    pass
 
 
 def get_db() -> SQLiteDB:
