@@ -122,6 +122,11 @@ def register_commands(app: typer.Typer) -> None:
             target = candidates[idx]
             if kopii or semantika_kopii:
                 copy_entry_reference(target, semantika=semantika_kopii)
+            if html:
+                from A_encik.display import preview_entry
+                preview_entry(target, open_browser=True)
+                info(tr_multi("Malfermis en retumilo", "Opened in browser", "Ouvert dans le navigateur"))
+                return
             # Auto-open for KaTeX/images content
             from A_encik.display import maybe_auto_open_browser
             if maybe_auto_open_browser(target):
