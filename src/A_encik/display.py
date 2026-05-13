@@ -105,6 +105,10 @@ def render_entry_html(
         if key in ("ligilo", "semantika", "ligiloj", "titolo_fold"):
             continue
 
+        # Resolve inline semantic arcs before markdown rendering
+        if isinstance(value, str) and key not in PLAIN_FIELDS:
+            value = _resolve_inline_links(value, link_depth=0)
+
         field_html = _render_field(key, value)
         if field_html:
             rows.append(f'<div class="field"><label>{key}</label>{field_html}</div>')
@@ -190,6 +194,54 @@ def _render_field(key: str, value: Any) -> str:
         return f'<div class="field-content">{_escape_html(str(value))}</div>'
 
 
+def _resolve_inline_links(md_text: str, link_depth: int = 0) -> str:
+    """Resolve ``[label](#uuid, ...)`` inline links to clickable hyperlinks.
+
+    The markdown parser (mistune) rejects URLs containing commas, so the
+    autish-legacy format ``[Francio](#uuid, wdt:P17)`` is NOT rendered as
+    a link. This function pre-processes the markdown text, resolving
+    ``#uuid`` references to either:
+
+    - A ``file://`` URL pointing to the target entry's HTML page (when
+      *link_depth* > 0, i.e. inside a linked graph).
+    - A plain ``[label](#uuid-prefix)`` markdown link (when
+      *link_depth* == 0, i.e. single-entry view).
+
+    Args:
+        md_text: Markdown text containing ``[label](#uuid, ...)`` patterns.
+        link_depth: Current link recursion depth. 0 = no recursion.
+
+    Returns:
+        Markdown text with resolved links.
+    """
+    import re as _re
+    from A_encik.service import get_service as _get_svc
+
+    def _replace(m: _re.Match) -> str:
+        label = m.group(1).strip()
+        ref_token = m.group(2).strip().split(",", 1)[0].strip().lstrip("#")
+        if not ref_token or len(ref_token) < 8:
+            return label
+        svc = _get_svc()
+        target = svc.get(ref_token)
+        if not target:
+            return f"{label} (#{ref_token[:8]})"
+        short = target["uuid"][:8]
+        if link_depth > 0:
+            # Render target entry HTML and link as file URL
+            target_html = render_entry_html(target, include_fields=None)
+            target_path = preview_html(target_html, open_browser=False, title=target.get("titolo", "encik"))
+            return f"[{label}](file://{target_path})"
+        # Simple markdown link to fragment
+        return f"[{label}](#{short})"
+
+    return _re.sub(
+        r"\[([^\]]+)\]\(((?:#|ec#|vt#)[^)]+)\)",
+        _replace,
+        md_text,
+    )
+
+
 def _escape_html(text: str) -> str:
     """Escape HTML special characters."""
     return (
@@ -198,6 +250,92 @@ def _escape_html(text: str) -> str:
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
+
+
+def render_linked_graph_html(
+    entry: dict[str, Any],
+    max_depth: int = 2,
+) -> str:
+    """Render an entry and its linked graph as an interactive HTML page.
+
+    Uses vis.js (CDN) for force-directed graph visualization of the
+    entry's superklaso, subclasses, and ligilo connections.
+
+    Args:
+        entry: The root entry dict.
+        max_depth: Maximum traversal depth for the graph.
+
+    Returns:
+        Full HTML document as a string.
+    """
+    from A_encik.service import get_service as _gs
+    svc = _gs()
+    graph = svc.get_linked_graph(entry["uuid"], max_depth=max_depth)
+    nodes = graph.get("nodes", [])
+    edges = graph.get("edges", [])
+
+    # Build vis.js datasets
+    js_nodes = []
+    for n in nodes:
+        _titolo = _escape_html(n.get("titolo", "") or n["uuid"][:8])
+        _uuid = n["uuid"]
+        _depth = n.get("depth", 0)
+        js_nodes.append(
+            f'{{id: "{_uuid}", label: "{_titolo}", group: {_depth}}}'
+        )
+
+    js_edges = []
+    for e in edges:
+        js_edges.append(
+            f'{{from: "{e.get("from", "")}", to: "{e.get("to", "")}", '
+            f'label: "{_escape_html(e.get("type", ""))}"}}'
+        )
+
+    nodes_json = "[\n    " + ",\n    ".join(js_nodes) + "\n  ]"
+    edges_json = "[\n    " + ",\n    ".join(js_edges) + "\n  ]"
+
+    title = _escape_html(entry.get("titolo", "encik"))
+
+    return f"""<!DOCTYPE html>
+<html lang="eo">
+<head>
+  <meta charset="UTF-8">
+  <title>{title} — grafo</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.6/standalone/umd/vis-network.min.js"></script>
+  <style>
+    body {{ margin: 0; font-family: system-ui, sans-serif; }}
+    #network {{ width: 100%; height: 100vh; border: none; }}
+    .info {{ position: fixed; bottom: 10px; right: 10px; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #666; }}
+  </style>
+</head>
+<body>
+  <div id="network"></div>
+  <div class="info">{title} — {len(nodes)} nodoj, {len(edges)} rilatoj</div>
+  <script>
+    var nodes = new vis.DataSet({nodes_json});
+    var edges = new vis.DataSet({edges_json});
+    var container = document.getElementById("network");
+    var data = {{ nodes: nodes, edges: edges }};
+    var options = {{
+      physics: {{ solver: "forceAtlas2Based", forceAtlas2Based: {{ gravitationalConstant: -40 }} }},
+      groups: {{
+        0: {{ color: {{ background: "#e74c3c", border: "#c0392b" }}, font: {{ size: 16, color: "#000" }} }},
+        1: {{ color: {{ background: "#3498db", border: "#2980b9" }}, font: {{ size: 14 }} }},
+        2: {{ color: {{ background: "#2ecc71", border: "#27ae60" }}, font: {{ size: 12 }} }},
+        3: {{ color: {{ background: "#f39c12", border: "#e67e22" }}, font: {{ size: 12 }} }}
+      }},
+      edges: {{ font: {{ size: 10, color: "#666" }}, arrows: {{ to: {{ enabled: true, scaleFactor: 0.5 }} }} }}
+    }};
+    var network = new vis.Network(container, data, options);
+    network.on("click", function(params) {{
+      if (params.nodes.length > 0) {{
+        var nodeId = params.nodes[0];
+        window.location.href = "#" + nodeId;
+      }}
+    }});
+  </script>
+</body>
+</html>"""
 
 
 def preview_entry(
