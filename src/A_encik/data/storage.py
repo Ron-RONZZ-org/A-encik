@@ -50,99 +50,112 @@ def ensure_dirs() -> None:
 
 
 def _repair_if_corrupted() -> bool:
-    """Check database integrity and repair via VACUUM if needed.
+    """Check and repair database if corrupted.
 
-    ``VACUUM`` rebuilds the entire database file, repairing most types of
-    corruption without losing any data. If the database is healthy, this
-    is a no-op (~5ms on a 3MB DB).
+    Purges stale WAL+SHM files and rebuilds the FTS5 table if needed.
+    The FTS5 virtual table can retain internal corruption even after
+    WAL cleanup — the only fix is to drop and recreate it.
 
     Returns:
-        True if repair was attempted, False if DB was already healthy.
+        True if repair was attempted, False if nothing was needed.
     """
     if not _DB_FILE.exists():
         return False
 
-    _conn = None
-    try:
-        _conn = sqlite3.connect(str(_DB_FILE))
-        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        if _result == "ok":
-            return False
-    except Exception:
-        pass
-    finally:
-        if _conn is not None:
-            _conn.close()
-
-    from A import warning as _w
-
-    # Try 1: VACUUM (rebuilds main DB file)
-    _w("Provas VACUUM-riparon...")
-    _conn = None
-    try:
-        _conn = sqlite3.connect(str(_DB_FILE))
-        _conn.execute("VACUUM")
-        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        if _result == "ok":
-            _w("VACUUM sukcesis.")
-            return True
-    except Exception:
-        pass
-    finally:
-        if _conn is not None:
-            _conn.close()
-
-    # Try 2: Delete WAL+SHM files (often the culprit — the main DB
-    # file itself may be fine, only the write-ahead log is corrupt).
-    _w("Forigas WAL-ŝutdaton...")
+    # Always clean orphaned WAL/SHM on startup
     for _suffix in ("-wal", "-shm"):
-        _p = _DB_FILE.with_name(_DB_FILE.name + _suffix)
-        _p.unlink(missing_ok=True)
+        _DB_FILE.with_name(_DB_FILE.name + _suffix).unlink(missing_ok=True)
+
+    # Verify main DB integrity
     _conn = None
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        if _result == "ok":
-            # Trigger a clean checkpoint to recreate WAL
-            _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            _w("WAL forigita — datumbazo riparita.")
-            return True
-    except Exception:
-        pass
-    finally:
-        if _conn is not None:
+        if _result != "ok":
             _conn.close()
-
-    # Try 3: sqlite3.backup() — clean copy
-    _w("Provas rekonstruon per backup/restore...")
-    _conn = _bak_conn = None
-    try:
-        _bak = _DB_FILE.with_suffix(".db.recovered")
-        _conn = sqlite3.connect(str(_DB_FILE))
-        _bak_conn = sqlite3.connect(str(_bak))
-        _conn.backup(_bak_conn)
-        _bak_conn.close()
-        _conn.close()
-        import shutil
-        shutil.move(str(_bak), str(_DB_FILE))
-        _w("Rekonstruo sukcesis.")
-        return True
+            return False  # Main DB itself is corrupt — can't fix
     except Exception:
         return False
     finally:
-        for _c in (_conn, _bak_conn):
-            if _c is not None:
-                try:
-                    _c.close()
-                except Exception:
-                    pass
+        if _conn is not None:
+            _conn.close()
+
+    # Rebuild FTS5 table if its schema doesn't match the config.
+    # FTS5 virtual tables can become corrupt independently of the
+    # main database (the FTS index stores data in shadow tables
+    # that aren't covered by integrity_check).
+    _rebuilt = False
+    _fts_name = ENCIK_FTS_CONFIG.fts_table
+    _needs_rebuild = True
+
+    _conn = _try_conn = None
+    try:
+        _conn = sqlite3.connect(str(_DB_FILE))
+        _row = _conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (_fts_name,)
+        ).fetchone()
+        if _row:
+            _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _row[0]}
+            _needs_rebuild = _actual != set(ENCIK_FTS_CONFIG.fts_columns)
+        if _needs_rebuild:
+            # Try external content rebuild first
+            _conn.execute(f"DROP TABLE IF EXISTS {_fts_name}")
+            _conn.execute(f"""CREATE VIRTUAL TABLE IF NOT EXISTS {_fts_name}
+                USING fts5(
+                    uuid UNINDEXED,
+                    terminologio_search,
+                    difinio,
+                    enhavo,
+                    content=encik,
+                    content_rowid=rowid,
+                    tokenize='unicode61'
+                )""")
+            _conn.execute(f"INSERT INTO {_fts_name}({_fts_name}) VALUES('rebuild')")
+            _rebuilt = True
+    except Exception:
+        # FTS5 rebuild via external content may hang if shadow tables
+        # are corrupt. Fall back to standalone + manual population.
+        if _conn is not None:
+            _conn.close()
+        _conn = None
+        try:
+            _conn = sqlite3.connect(str(_DB_FILE))
+            _conn.execute(f"DROP TABLE IF EXISTS {_fts_name}")
+            _conn.execute(f"""CREATE VIRTUAL TABLE {_fts_name} USING fts5(
+                uuid UNINDEXED,
+                terminologio_search,
+                difinio,
+                enhavo,
+                tokenize='unicode61'
+            )""")
+            _rows = _conn.execute(
+                "SELECT rowid, uuid, terminologio_search, difinio, enhavo FROM encik"
+            ).fetchall()
+            for _r in _rows:
+                _conn.execute(
+                    f"INSERT INTO {_fts_name}(rowid, uuid, terminologio_search, difinio, enhavo) "
+                    "VALUES (?, ?, ?, ?, ?)", _r
+                )
+            _conn.commit()
+            _rebuilt = True
+        except Exception:
+            pass
+    finally:
+        if _conn is not None:
+            _conn.close()
+
+    return _rebuilt
 
 
 def get_db() -> SQLiteDB:
     """Get database connection."""
     ensure_dirs()
-    _repair_if_corrupted()
+    if _repair_if_corrupted():
+        # Database was repaired — the singleton EncikService may hold a
+        # stale connection. Reset so callers get a fresh service+connection.
+        import A_encik.service as _svc
+        _svc._encik_service = None
     db = SQLiteDB(_DB_FILE)
 
     # If the FTS table has wrong columns (schema changed), drop it first
