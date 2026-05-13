@@ -138,8 +138,25 @@ def migrate_db(db: SQLiteDB) -> None:
                 "UPDATE encik SET terminologio_search = ? WHERE uuid = ?",
                 (folded, r["uuid"]),
             )
-        # FTS table has old columns (titolo) — drop and recreate
-        db.execute("DROP TABLE IF EXISTS encik_fts")
+
+    # Sync FTS table columns: if the existing FTS table has old columns
+    # (e.g., titolo instead of terminologio_search), drop it so that
+    # _ensure_fts() recreates it with the current FTS config.
+    _fts_name = ENCIK_FTS_CONFIG.fts_table
+    _fts_row = db.execute_one(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (_fts_name,)
+    )
+    if _fts_row:
+        _fts_sql = _fts_row.get("sql", "")
+        # Check all expected FTS columns are present in the FTS table DDL
+        _expected_cols = set(ENCIK_FTS_CONFIG.fts_columns)
+        _found_cols = set()
+        for col in ENCIK_FTS_CONFIG.fts_columns:
+            if col in _fts_sql:
+                _found_cols.add(col)
+        if _found_cols != _expected_cols:
+            db.execute(f"DROP TABLE IF EXISTS {_fts_name}")
+
     # Create index after ensuring column exists
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_encik_terminologio_search ON encik(terminologio_search)"
