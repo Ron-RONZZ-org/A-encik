@@ -58,6 +58,25 @@ def get_db() -> SQLiteDB:
         if stmt.strip():
             db.execute(stmt)
     migrate_db(db)
+    # After migration, ensure FTS table columns match the config.
+    # FTS5 virtual tables can't be altered, so if columns changed
+    # we must drop and recreate via _rebuild_fts.
+    _fts_name = ENCIK_FTS_CONFIG.fts_table
+    _fts_row = db.execute_one(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (_fts_name,)
+    )
+    if _fts_row:
+        _fts_sql = _fts_row.get("sql", "")
+        _expected = set(ENCIK_FTS_CONFIG.fts_columns)
+        _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
+        if _actual != _expected:
+            # Columns mismatch — use a fresh connection to drop FTS.
+            # The cached connection may have pending WAL state from
+            # earlier DDL (CREATE TABLE, indexes, ALTER TABLE) that
+            # interferes with FTS5 virtual table operations.
+            with db.raw_connection() as _raw:
+                _raw.execute(f"DROP TABLE IF EXISTS {_fts_name}")
+                _raw.commit()
     # Init semantika cache table (lazy import avoids circular dep)
     from A_encik.data.semantika_cache import init_cache_table as _init_cache
     _init_cache(db)
@@ -138,24 +157,6 @@ def migrate_db(db: SQLiteDB) -> None:
                 "UPDATE encik SET terminologio_search = ? WHERE uuid = ?",
                 (folded, r["uuid"]),
             )
-
-    # Sync FTS table columns: if the existing FTS table has old columns
-    # (e.g., titolo instead of terminologio_search), drop it so that
-    # _ensure_fts() recreates it with the current FTS config.
-    _fts_name = ENCIK_FTS_CONFIG.fts_table
-    _fts_row = db.execute_one(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (_fts_name,)
-    )
-    if _fts_row:
-        _fts_sql = _fts_row.get("sql", "")
-        # Check all expected FTS columns are present in the FTS table DDL
-        _expected_cols = set(ENCIK_FTS_CONFIG.fts_columns)
-        _found_cols = set()
-        for col in ENCIK_FTS_CONFIG.fts_columns:
-            if col in _fts_sql:
-                _found_cols.add(col)
-        if _found_cols != _expected_cols:
-            db.execute(f"DROP TABLE IF EXISTS {_fts_name}")
 
     # Create index after ensuring column exists
     db.execute(
