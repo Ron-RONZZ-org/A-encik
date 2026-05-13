@@ -20,11 +20,11 @@ def validate_enc_entry(entry: dict) -> list[str]:
     """
     errors = []
 
-    if not entry.get("titolo"):
-        errors.append("Mankas titolo")
-
     terminologio = entry.get("terminologio") or {}
     difinoj = entry.get("difinoj") or {}
+
+    if not terminologio:
+        errors.append("Mankas terminologio")
     if not terminologio and not difinoj:
         errors.append("Mankas terminologio aŭ difinoj")
 

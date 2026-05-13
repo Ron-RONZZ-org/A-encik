@@ -12,7 +12,7 @@ from A.console import console
 from A import tr_multi
 
 from A_encik.service import get_service
-from A_encik.display_helpers import copy_entry_reference
+from A_encik.display_helpers import copy_entry_reference, entry_display_name
 from A_encik.display import display_entry_panel
 
 
@@ -212,12 +212,16 @@ def register_commands(app: typer.Typer) -> None:
                     error(f"Validiga eraro: {e}")
                 raise typer.Exit(1)
 
-            existing = service.find_by_titolo(parsed["titolo"])
+            existing = service.find_by_terminologio(
+                parsed.get("terminologio") or {}
+            )
+            entry_name = entry_display_name(parsed)
             if existing:
+                existing_name = entry_display_name(existing)
                 error(tr_multi(
-                    f"Eniro '{parsed['titolo']}' jam ekzistas (#{existing['uuid'][:8]}).",
-                    f"Entry '{parsed['titolo']}' already exists (#{existing['uuid'][:8]}).",
-                    f"Entrée '{parsed['titolo']}' existe déjà (#{existing['uuid'][:8]}).",
+                    f"Eniro '{entry_name}' jam ekzistas (#{existing['uuid'][:8]}).",
+                    f"Entry '{entry_name}' already exists (#{existing['uuid'][:8]}).",
+                    f"Entrée '{entry_name}' existe déjà (#{existing['uuid'][:8]}).",
                 ))
                 answer = typer.prompt(
                     tr_multi("Ĉu ĝisdatigi? (J/n)", "Update? (J/n)", "Mettre à jour ? (J/n)"),
@@ -228,16 +232,16 @@ def register_commands(app: typer.Typer) -> None:
                     return
                 entry = service.update(existing["uuid"], parsed)
                 msg = tr_multi(
-                    f"Anstataŭigis {parsed['titolo']}",
-                    f"Replaced {parsed['titolo']}",
-                    f"Remplacé {parsed['titolo']}",
+                    f"Anstataŭigis {entry_name}",
+                    f"Replaced {entry_name}",
+                    f"Remplacé {entry_name}",
                 )
             else:
                 entry = service.create(parsed)
                 msg = tr_multi(
-                    f"Aldonis {parsed['titolo']}",
-                    f"Added {parsed['titolo']}",
-                    f"Ajoute {parsed['titolo']}",
+                    f"Aldonis {entry_name}",
+                    f"Added {entry_name}",
+                    f"Ajoute {entry_name}",
                 )
 
         info(msg)

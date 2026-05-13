@@ -12,6 +12,7 @@ from A.console import console
 from A import tr_multi
 
 from A_encik.service import get_service
+from A_encik.display_helpers import entry_display_name
 
 
 def register_commands(app: typer.Typer) -> None:
@@ -47,7 +48,7 @@ def register_commands(app: typer.Typer) -> None:
 
         graph = service.get_linked_graph(entry["uuid"], max_depth=profundeco)
 
-        console.print(f"[bold]Grafo por:[/bold] {entry.get('titolo', entry['uuid'])}")
+        console.print(f"[bold]Grafo por:[/bold] {entry_display_name(entry)}")
         console.print()
 
         if not graph["nodes"]:
@@ -121,7 +122,8 @@ def register_commands(app: typer.Typer) -> None:
             with out_path.open("w", encoding="utf-8") as f:
                 json.dump(entry, f, ensure_ascii=False, indent=2)
 
-        info(tr_multi(f"Eksportis {entry['titolo']} al {out_path}", f"Exported {entry['titolo']} to {out_path}", f"Exporté {entry['titolo']} vers {out_path}"))
+        n = entry_display_name(entry)
+        info(tr_multi(f"Eksportis {n} al {out_path}", f"Exported {n} to {out_path}", f"Exporté {n} vers {out_path}"))
 
     @app.command("importi")
     def importi(
@@ -153,7 +155,8 @@ def register_commands(app: typer.Typer) -> None:
         service = get_service()
         created = service.create(entry)
 
-        info(tr_multi(f"Importis {created['titolo']}", f"Imported {created['titolo']}", f"Importé {created['titolo']}"))
+        n = entry_display_name(created)
+        info(tr_multi(f"Importis {n}", f"Imported {n}", f"Importé {n}"))
 
     @app.command("agordi")
     def agordi() -> None:

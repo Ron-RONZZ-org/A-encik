@@ -131,6 +131,19 @@ class GraphMixin:
                     break
         return siblings
 
+    @staticmethod
+    def _node_name(entry: dict) -> str:
+        """Get a display name for a graph node from terminologio."""
+        term = entry.get("terminologio") or {}
+        for lang in ("eo", "en"):
+            val = term.get(lang)
+            if val:
+                return str(val)
+        for val in term.values():
+            if val:
+                return str(val)
+        return entry.get("uuid", "")[:8]
+
     def get_linked_graph(
         self,
         uuid: str,
@@ -155,7 +168,7 @@ class GraphMixin:
 
         nodes.append({
             "uuid": uuid,
-            "titolo": entry.get("titolo", ""),
+            "titolo": self._node_name(entry),
             "depth": 0,
         })
 
@@ -177,7 +190,7 @@ class GraphMixin:
             if current_entry:
                 nodes.append({
                     "uuid": current_uuid,
-                    "titolo": current_entry.get("titolo", ""),
+                    "titolo": self._node_name(current_entry),
                     "depth": depth,
                 })
                 edges.append({

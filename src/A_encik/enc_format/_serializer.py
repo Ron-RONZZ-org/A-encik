@@ -114,14 +114,22 @@ def entry_to_enc(entry: dict[str, Any]) -> str:
     datumo = entry.get("datumo") or {}
     semantika = entry.get("semantika") or []
     enhavo = entry.get("enhavo", "")
-    titolo = entry.get("titolo", "")
 
     parts: list[str] = []
 
-    # Title comment
-    if titolo:
-        parts.append(f"# {titolo}")
-        parts.append("")
+    # Title comment (from first terminologio value)
+    for lang in ("eo", "en"):
+        val = terminologio.get(lang)
+        if val:
+            parts.append(f"# {val}")
+            parts.append("")
+            break
+    if not parts:
+        for val in terminologio.values():
+            if val:
+                parts.append(f"# {val}")
+                parts.append("")
+                break
 
     # terminologio
     term_lines = _lang_map_lines("terminologio", terminologio)

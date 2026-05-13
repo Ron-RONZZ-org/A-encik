@@ -105,7 +105,7 @@ def entry_locale_title(
         if term.get(lang):
             return str(term[lang])
 
-    return str(entry.get("titolo") or next(iter(term.values()), ""))
+    return str(next(iter(term.values()), ""))
 
 
 def normalize_lingvo_codes(raw: str | None, field: str = "--lingvo") -> list[str]:
@@ -333,6 +333,30 @@ def print_candidates_table(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def entry_display_name(entry: dict) -> str:
+    """Return the first available `terminologio` value for display messages.
+
+    Unlike :func:`entry_locale_title`, this ignores language preferences —
+    it just returns the first non-empty value so success/error messages
+    don't show empty strings. Prefers ``"eo"``, then ``"en"``, then any.
+
+    Args:
+        entry: An encik entry dict.
+
+    Returns:
+        A displayable title string, never empty.
+    """
+    term = entry.get("terminologio") or {}
+    for lang in ("eo", "en"):
+        val = term.get(lang)
+        if val:
+            return str(val)
+    for val in term.values():
+        if val:
+            return str(val)
+    return ""
+
+
 def strip_title_disambiguation(title: str) -> str:
     """Remove parenthesized disambiguation text from a title.
 
@@ -385,6 +409,7 @@ def copy_entry_reference(
 __all__ = [
     "preferred_lang",
     "entry_locale_title",
+    "entry_display_name",
     "normalize_lingvo_codes",
     "has_non_cli_renderable_markup",
     "render_markdown_text",

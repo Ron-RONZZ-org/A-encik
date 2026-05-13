@@ -11,6 +11,7 @@ from A.console import console
 from A import tr_multi
 
 from A_encik.service import get_service
+from A_encik.display_helpers import entry_display_name
 
 rubujo_app = typer.Typer(
     name="rubujo",
@@ -58,7 +59,8 @@ def rubujo_restauri(
         raise typer.Exit(1)
 
     service.restore(entry["uuid"])
-    info(tr_multi(f"Restaŭris {entry['titolo']}", f"Restored {entry['titolo']}", f"Restauré {entry['titolo']}"))
+    n = entry_display_name(entry)
+    info(tr_multi(f"Restaŭris {n}", f"Restored {n}", f"Restauré {n}"))
 
 
 @rubujo_app.command("malplenigi")
@@ -98,4 +100,5 @@ def rubujo_permanent_forigi(
         raise typer.Exit(1)
 
     service.permanent_delete(entry["uuid"])
-    info(tr_multi(f"Forigis {entry['titolo']} permanenta", f"Permanently deleted {entry['titolo']}", f"Supprimé {entry['titolo']} définitivement"))
+    n = entry_display_name(entry)
+    info(tr_multi(f"Forigis {n} permanenta", f"Permanently deleted {n}", f"Supprimé {n} définitivement"))

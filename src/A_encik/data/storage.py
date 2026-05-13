@@ -17,9 +17,10 @@ _DB_FILE: Path = _DATA_DIR / "encik.db"
 _CREATE_ENCIK = """
 CREATE TABLE IF NOT EXISTS encik (
     uuid        TEXT PRIMARY KEY,
-    titolo      TEXT NOT NULL,
+    titolo      TEXT,
     difinio     TEXT NOT NULL DEFAULT '',
     terminologio TEXT NOT NULL DEFAULT '{}',
+    terminologio_search TEXT NOT NULL DEFAULT '',
     difinoj     TEXT NOT NULL DEFAULT '{}',
     enhavo      TEXT NOT NULL DEFAULT '',
     superklaso  TEXT NOT NULL DEFAULT '[]',
@@ -30,16 +31,18 @@ CREATE TABLE IF NOT EXISTS encik (
     semantika   TEXT NOT NULL DEFAULT '[]',
     ligiloj     TEXT NOT NULL DEFAULT '[]',
     kreita_je   TEXT NOT NULL,
-    modifita_je TEXT NOT NULL,
-    titolo_fold TEXT NOT NULL DEFAULT ''
+    modifita_je TEXT NOT NULL
 );
 """
 
 _CREATE_ENCIK_INDEXES = """
-CREATE INDEX IF NOT EXISTS idx_encik_titolo_lower ON encik(LOWER(titolo));
 CREATE INDEX IF NOT EXISTS idx_encik_uuid_prefix ON encik(substr(uuid, 1, 8));
 CREATE INDEX IF NOT EXISTS idx_encik_kreita_je ON encik(kreita_je);
+CREATE INDEX IF NOT EXISTS idx_encik_terminologio_search ON encik(terminologio_search);
+CREATE INDEX IF NOT EXISTS idx_encik_difinio_lower ON encik(LOWER(difinio));
 """
+
+
 
 def ensure_dirs() -> None:
     """Ensure data directory exists."""
@@ -64,10 +67,10 @@ def get_db() -> SQLiteDB:
 # FTS5 configuration for encik full-text search
 ENCIK_FTS_CONFIG = FTSConfig(
     table="encik",
-    fts_columns=["titolo", "difinio", "enhavo"],
+    fts_columns=["terminologio_search", "difinio", "enhavo"],
     filter_columns=[],
     normalize={
-        "titolo": fold_search_text,
+        "terminologio_search": fold_search_text,
         "difinio": fold_search_text,
         "enhavo": fold_search_text,
     },
@@ -111,22 +114,33 @@ def migrate_db(db: SQLiteDB) -> None:
         db.execute(
             "ALTER TABLE encik ADD COLUMN ligiloj TEXT NOT NULL DEFAULT '[]'"
         )
-    if "titolo_fold" not in cols:
+    if "terminologio_search" not in cols:
         db.execute(
-            "ALTER TABLE encik ADD COLUMN titolo_fold TEXT NOT NULL DEFAULT ''"
+            "ALTER TABLE encik ADD COLUMN terminologio_search TEXT NOT NULL DEFAULT ''"
         )
-        # Populate for existing entries
+        # Populate for existing entries from terminologio JSON
         from A.utils.normalize import fold_search_text as _fold
-        rows = db.execute("SELECT uuid, titolo FROM encik")
+        rows = db.execute("SELECT uuid, terminologio FROM encik")
         for r in rows:
-            folded = _fold(r["titolo"])
+            raw = r["terminologio"]
+            if isinstance(raw, str):
+                try:
+                    term = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    term = {}
+            elif isinstance(raw, dict):
+                term = raw
+            else:
+                term = {}
+            values = [str(v) for v in term.values() if v]
+            folded = " ".join(_fold(v) for v in values)
             db.execute(
-                "UPDATE encik SET titolo_fold = ? WHERE uuid = ?",
+                "UPDATE encik SET terminologio_search = ? WHERE uuid = ?",
                 (folded, r["uuid"]),
             )
     # Create index after ensuring column exists
     db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_encik_titolo_fold ON encik(titolo_fold)"
+        "CREATE INDEX IF NOT EXISTS idx_encik_terminologio_search ON encik(terminologio_search)"
     )
 
 

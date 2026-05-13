@@ -16,6 +16,7 @@ from A_encik.service import get_service
 from A_encik.display_helpers import (
     preferred_lang,
     entry_locale_title,
+    entry_display_name,
     render_markdown_text,
     display_ligilo_items,
     copy_entry_reference,
@@ -292,16 +293,18 @@ def register_commands(app: typer.Typer) -> None:
 
         updated = service.update(entry["uuid"], data)
         if dosiero is not None:
+            mod_name = entry_display_name(entry)
             info(tr_multi(
-                f"Anstataŭigis {data.get('titolo', entry['titolo'])}",
-                f"Replaced {data.get('titolo', entry['titolo'])}",
-                f"Remplacé {data.get('titolo', entry['titolo'])}",
+                f"Anstataŭigis {mod_name}",
+                f"Replaced {mod_name}",
+                f"Remplacé {mod_name}",
             ))
         else:
+            mod_name = entry_display_name(updated)
             info(tr_multi(
-                f"Modifikis {updated['titolo']}",
-                f"Modified {updated['titolo']}",
-                f"Modifié {updated['titolo']}",
+                f"Modifikis {mod_name}",
+                f"Modified {mod_name}",
+                f"Modifié {mod_name}",
             ))
         console.print(f"[green]UUID:[/] {updated.get('uuid')}")
 
@@ -360,8 +363,10 @@ def register_commands(app: typer.Typer) -> None:
                 soft = not hard
                 service.delete(uuid, soft=soft)
                 if soft:
-                    info(tr_multi(f"Forigis {entry['titolo']} (sxoveblas)", f"Deleted {entry['titolo']} (soft)", f"Supprime {entry['titolo']} ( mou)"))
+                    n = entry_display_name(entry)
+                    info(tr_multi(f"Forigis {n} (sxoveblas)", f"Deleted {n} (soft)", f"Supprime {n} ( mou)"))
                 else:
-                    info(tr_multi(f"Forigis {entry['titolo']} (permanenta)", f"Deleted {entry['titolo']} (permanent)", f"Supprime {entry['titolo']} (permanent)"))
+                    n = entry_display_name(entry)
+                    info(tr_multi(f"Forigis {n} (permanenta)", f"Deleted {n} (permanent)", f"Supprime {n} (permanent)"))
             except Exception as e:
                 error(str(e))

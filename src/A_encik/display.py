@@ -42,7 +42,8 @@ def render_entry_html(
     Returns:
         HTML string with rendered markdown fields
     """
-    title = entry.get("titolo", entry.get("uuid", "Unkonata"))
+    term = entry.get("terminologio") or {}
+    title = next(iter(term.values()), entry.get("uuid", "Unkonata"))
     created = entry.get("kreita_je", "")
     modified = entry.get("modifita_je", "")
 
@@ -307,7 +308,9 @@ def render_linked_graph_html(
     nodes_json = "[\n    " + ",\n    ".join(js_nodes) + "\n  ]"
     edges_json = "[\n    " + ",\n    ".join(js_edges) + "\n  ]"
 
-    title = _escape_html(entry.get("titolo", "encik"))
+    _graph_term = entry.get("terminologio") or {}
+    _graph_title_str = next(iter(_graph_term.values()), "encik")
+    title = _escape_html(_graph_title_str)
 
     return f"""<!DOCTYPE html>
 <html lang="eo">
@@ -367,7 +370,9 @@ def preview_entry(
         Path to the rendered HTML file
     """
     html = render_entry_html(entry)
-    title = title or entry.get("titolo", "encik")
+    if not title:
+        _pt = entry.get("terminologio") or {}
+        title = next(iter(_pt.values()), "encik")
     return preview_html(html, open_browser=open_browser, title=title)
 
 

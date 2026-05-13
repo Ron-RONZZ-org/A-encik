@@ -100,13 +100,14 @@ class TimeEntryMixin:
         difino_eo: str,
         superklaso: list[str] | None = None,
     ) -> str:
-        """Find an entry by title or create it. Returns UUID."""
-        existing = self.find_by_titolo(titolo)  # type: ignore[attr-defined]
+        """Find an entry by terminologio or create it. Returns UUID."""
+        existing = self.find_by_terminologio(  # type: ignore[attr-defined]
+            {"eo": terminologio_eo}
+        )
         if existing:
             return existing["uuid"]
 
         data: dict[str, Any] = {
-            "titolo": titolo,
             "terminologio": {"eo": terminologio_eo},
             "difinoj": {"eo": difino_eo},
         }
@@ -139,8 +140,10 @@ class TimeEntryMixin:
         jarc_ref = self._ensure_type_ref("jarcento")
         greg_ref = self._ensure_type_ref("gregoria")
 
-        titolo = f"{century}a jarcento{_suf_long} (kalendara jarcento)"
-        existing = self.find_by_titolo(titolo)  # type: ignore[attr-defined]
+        eo_term = f"{century}a jarcento{_suf_long} (kalendara jarcento)"
+        existing = self.find_by_terminologio(  # type: ignore[attr-defined]
+            {"eo": eo_term}
+        )
         if existing:
             if extra_fields:
                 existing.update(extra_fields)
@@ -148,8 +151,7 @@ class TimeEntryMixin:
             return existing
 
         data: dict[str, Any] = {
-            "titolo": titolo,
-            "terminologio": {"eo": f"{century}a jarcento{_suf_long} (kalendara jarcento)"},
+            "terminologio": {"eo": eo_term},
             "difinoj": {
                 "eo": (
                     f"[jarcento](#{jarc_ref}, rdf:type) "
@@ -189,8 +191,10 @@ class TimeEntryMixin:
         century_entry = self.ensure_century(century_num, bce=bce)
 
         label = f"{decade_start}a jardeko{_suf_long}"
-        titolo = f"{label} (kalendara jardeko)"
-        existing = self.find_by_titolo(titolo)  # type: ignore[attr-defined]
+        eo_label = f"{label} (kalendara jardeko)"
+        existing = self.find_by_terminologio(  # type: ignore[attr-defined]
+            {"eo": eo_label}
+        )
         if existing:
             if extra_fields:
                 existing.update(extra_fields)
@@ -198,8 +202,7 @@ class TimeEntryMixin:
             return existing
 
         data: dict[str, Any] = {
-            "titolo": titolo,
-            "terminologio": {"eo": f"{label} (kalendara jardeko)"},
+            "terminologio": {"eo": eo_label},
             "difinoj": {
                 "eo": (
                     f"[jardeko](#{jard_ref}, rdf:type) "
@@ -239,8 +242,10 @@ class TimeEntryMixin:
         decade_entry = self.ensure_decade(decade_start, bce=bce)
 
         label = f"{year}{_suf_short}"
-        titolo = f"{label} (kalendara jaro)"
-        existing = self.find_by_titolo(titolo)  # type: ignore[attr-defined]
+        eo_label = f"{label} (kalendara jaro)"
+        existing = self.find_by_terminologio(  # type: ignore[attr-defined]
+            {"eo": eo_label}
+        )
         if existing:
             if extra_fields:
                 existing.update(extra_fields)
@@ -248,8 +253,7 @@ class TimeEntryMixin:
             return existing
 
         data: dict[str, Any] = {
-            "titolo": titolo,
-            "terminologio": {"eo": f"{label} (kalendara jaro)"},
+            "terminologio": {"eo": eo_label},
             "difinoj": {
                 "eo": (
                     f"[jaro](#{jaro_ref}, rdf:type) "

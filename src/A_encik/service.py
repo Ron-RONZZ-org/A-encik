@@ -46,10 +46,33 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         """Parse JSON columns back to Python objects."""
         return row_to_dict(row)
 
+    @staticmethod
+    def _ensure_terminologio_search(terminologio: dict[str, str]) -> str:
+        """Build folded search string from terminologio dict."""
+        from A.utils.normalize import fold_search_text as _fold
+        values = [str(v) for v in terminologio.values() if v]
+        return " ".join(_fold(v) for v in values)
+
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create with JSON serialization. FTS indexing handled by parent."""
-        from A.utils.normalize import fold_search_text as _fold
-        data["titolo_fold"] = _fold(data.get("titolo", ""))
+        term = data.get("terminologio") or {}
+        # Backward compat: if titolo is given without terminologio, populate
+        if not term and "titolo" in data:
+            term = {"eo": str(data["titolo"])}
+            data["terminologio"] = term
+        data["terminologio_search"] = self._ensure_terminologio_search(term)
+        # Backward compat: provide titolo for old schema (will be dropped)
+        if "titolo" not in data:
+            for lang in ("eo", "en"):
+                val = term.get(lang)
+                if val:
+                    data["titolo"] = str(val)
+                    break
+            if "titolo" not in data:
+                for val in term.values():
+                    if val:
+                        data["titolo"] = str(val)
+                        break
         data = self._serialize(data)
         result = super().create(data)
         entry = self._deserialize_row(result)
@@ -58,9 +81,10 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update with JSON serialization. FTS reindexing handled by parent."""
-        from A.utils.normalize import fold_search_text as _fold
-        if "titolo" in data:
-            data["titolo_fold"] = _fold(data["titolo"])
+        if "terminologio" in data:
+            data["terminologio_search"] = self._ensure_terminologio_search(
+                data["terminologio"]
+            )
         data = self._serialize(data)
         result = super().update(uuid, data)
         entry = self._deserialize_row(result)
@@ -126,20 +150,51 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         return [self._deserialize_row(row) for row in rows]
 
     def find_by_titolo(self, titolo: str) -> dict[str, Any] | None:
-        """Find entry by case- and accent-insensitive title."""
+        """Find entry where ANY ``terminologio`` value matches (accent-insensitive).
+
+        Searches all ``terminologio.{lang}`` values via the ``terminologio_search``
+        column, which contains all values folded and concatenated. This means
+        searching ``"Francio"`` finds entries where any language's term matches.
+        """
         from A.utils.normalize import fold_search_text as _fold
         folded = _fold(titolo)
+        if not folded:
+            return None
         row = self.db.execute_one(
-            "SELECT * FROM encik WHERE LOWER(titolo) = LOWER(?)", (titolo,)
+            "SELECT * FROM encik WHERE terminologio_search LIKE ? LIMIT 1",
+            (f"%{folded}%",),
         )
         if row:
             return self._deserialize_row(row)
-        if folded:
-            row = self.db.execute_one(
-                "SELECT * FROM encik WHERE titolo_fold = ?", (folded,)
-            )
-            if row:
-                return self._deserialize_row(row)
+        return None
+
+    def find_by_terminologio(
+        self, terminologio: dict[str, str]
+    ) -> dict[str, Any] | None:
+        """Find entry where ANY value in the given terminologio dict matches.
+
+        Used for duplicate detection: pass the parsed ``terminologio`` from
+        a .enc file, and this finds any existing entry that has a matching
+        term in ANY language.
+
+        Args:
+            terminologio: Dict like ``{"eo": "Francio", "en": "France"}``
+
+        Returns:
+            First matching entry, or None.
+        """
+        from A.utils.normalize import fold_search_text as _fold
+        values = [v for v in terminologio.values() if v]
+        if not values:
+            return None
+        conditions = " OR ".join(["terminologio_search LIKE ?"] * len(values))
+        params = [f"%{_fold(v)}%" for v in values]
+        row = self.db.execute_one(
+            f"SELECT * FROM {self.table} WHERE {conditions} LIMIT 1",
+            params,
+        )
+        if row:
+            return self._deserialize_row(row)
         return None
 
     def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
@@ -164,20 +219,20 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         query: str,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        """LIKE search with accent-insensitive fallback."""
+        """LIKE search — accent-insensitive, matches all terminologio values."""
         from A.utils.normalize import fold_search_text as _fold
         folded = _fold(query)
         if folded:
             rows = self.db.execute(
-                "SELECT * FROM encik WHERE titolo_fold LIKE ? LIMIT ?",
+                "SELECT * FROM encik WHERE terminologio_search LIKE ? LIMIT ?",
                 (f"%{folded}%", limit),
             )
             if rows:
                 return [self._deserialize_row(row) for row in rows]
         pattern = f"%{query}%"
         rows = self.db.execute(
-            "SELECT * FROM encik WHERE titolo LIKE ? OR difinio LIKE ? OR enhavo LIKE ? LIMIT ?",
-            (pattern, pattern, pattern, limit),
+            "SELECT * FROM encik WHERE difinio LIKE ? OR enhavo LIKE ? LIMIT ?",
+            (pattern, pattern, limit),
         )
         return [self._deserialize_row(row) for row in rows]
 

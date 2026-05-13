@@ -277,9 +277,8 @@ def parse_enc_file(path: Path) -> dict[str, Any]:
     if not difinio and difinoj:
         difinio = next(iter(difinoj.values()))
 
-    # Build entry dict
+    # Build entry dict (no primary titolo — all terminologio values are equal)
     entry: dict[str, Any] = {
-        "titolo": titolo,
         "terminologio": terminologio,
         "difinoj": difinoj,
     }
