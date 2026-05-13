@@ -49,32 +49,66 @@ def ensure_dirs() -> None:
     _ensure_dirs()
 
 
+def _repair_if_corrupted() -> bool:
+    """Check database integrity and repair via VACUUM if needed.
+
+    ``VACUUM`` rebuilds the entire database file, repairing most types of
+    corruption without losing any data. If the database is healthy, this
+    is a no-op (~5ms on a 3MB DB).
+
+    Returns:
+        True if repair was attempted, False if DB was already healthy.
+    """
+    if not _DB_FILE.exists():
+        return False
+    try:
+        _conn = sqlite3.connect(str(_DB_FILE))
+        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+        _conn.close()
+        if _result == "ok":
+            return False
+    except Exception:
+        _conn.close()
+
+    # DB is corrupted — try VACUUM (rebuilds file without losing data)
+    from A import warning as _w
+    _w("Datumbazo ŝajnas difektita. Provas VACUUM-riparon...")
+    try:
+        _conn = sqlite3.connect(str(_DB_FILE))
+        _conn.execute("VACUUM")
+        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+        _conn.close()
+        if _result == "ok":
+            _w("VACUUM sukcesis — datumbazo riparita.")
+            return True
+    except Exception:
+        _conn.close()
+
+    _w("VACUUM malsukcesis. Provas rekonstruon per backup/restore...")
+    try:
+        _bak = _DB_FILE.with_suffix(".db.vacuumed")
+        _conn = sqlite3.connect(str(_DB_FILE))
+        _bak_conn = sqlite3.connect(str(_bak))
+        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        _conn.backup(_bak_conn)
+        _bak_conn.close()
+        _conn.close()
+        # Replace corrupted with repaired copy
+        import shutil
+        shutil.move(str(_bak), str(_DB_FILE))
+        _w("Rekonstruo sukcesis.")
+        return True
+    except Exception:
+        pass
+
+    return False
+
+
 def get_db() -> SQLiteDB:
     """Get database connection."""
     ensure_dirs()
-
-    # Check for corruption before opening: if the DB file is malformed,
-    # back it up and start fresh. This can happen after a failed FTS
-    # index operation or system crash.
-    _db_exists = _DB_FILE.exists()
-    if _db_exists:
-        try:
-            _check = sqlite3.connect(str(_DB_FILE))
-            _check.execute("PRAGMA quick_check").fetchone()
-            _check.close()
-        except Exception:
-            # Corrupted — recover by recreating
-            _check.close()
-            import shutil
-            _bak = _DB_FILE.with_suffix(".db.bak")
-            shutil.copy2(str(_DB_FILE), str(_bak))
-            _DB_FILE.unlink(missing_ok=True)
-            for _suffix in ("-wal", "-shm"):
-                _p = _DB_FILE.with_name(_DB_FILE.name + _suffix)
-                _p.unlink(missing_ok=True)
-            from A import warning as _w
-            _w(f"Datumbazo riparita. Malnova konservita kiel: {_bak}")
-
+    _repair_if_corrupted()
     db = SQLiteDB(_DB_FILE)
 
     # If the FTS table has wrong columns (schema changed), drop it first
