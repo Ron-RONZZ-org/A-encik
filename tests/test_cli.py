@@ -83,12 +83,13 @@ class TestVidiCommand:
 class TestAldoniCommand:
     """Tests for aldoni command."""
     
-    def test_aldoni_requires_dosiero(self, runner):
-        """Test aldoni requires dosiero argument."""
+    def test_aldoni_requires_arg(self, runner):
+        """Test aldoni requires either dosiero or time flag."""
         result = runner.invoke(app, ["aldoni"])
         
-        # Missing required arg → exit 2 (Typer/Click convention)
-        assert result.exit_code == 2
+        # No dosiero + no time flag → custom error, exit 1
+        assert result.exit_code == 1
+        assert "bezonatas" in result.output.lower() or "require" in result.output.lower()
     
     def test_aldoni_file_not_found(self, runner):
         """Test aldoni errors on non-existent file."""
@@ -135,6 +136,58 @@ class TestAldoniCommand:
         
         assert result.exit_code == 1
         assert "unu el" in result.output.lower() or "only one" in result.output.lower()
+    
+    def test_aldoni_jaro(self, runner):
+        """Test aldoni with --jaro creates year entry."""
+        result = runner.invoke(app, ["aldoni", "--jaro", "1789"])
+        
+        assert result.exit_code == 0
+        assert "jaron 1789" in result.output.lower() or "year 1789" in result.output.lower()
+        assert "UUID:" in result.output
+    
+    def test_aldoni_jardeko(self, runner):
+        """Test aldoni with --jardeko creates decade entry."""
+        result = runner.invoke(app, ["aldoni", "--jardeko", "1780"])
+        
+        assert result.exit_code == 0
+        assert "jardekon" in result.output.lower() or "decade" in result.output.lower()
+        assert "UUID:" in result.output
+    
+    def test_aldoni_jarcento(self, runner):
+        """Test aldoni with --jarcento creates century entry."""
+        result = runner.invoke(app, ["aldoni", "--jarcento", "18"])
+        
+        assert result.exit_code == 0
+        assert "jarcenton" in result.output.lower() or "century" in result.output.lower()
+    
+    def test_aldoni_jaro_bce(self, runner):
+        """Test aldoni with --jaro --bce creates BCE year entry."""
+        result = runner.invoke(app, ["aldoni", "--jaro", "44", "--bce"])
+        
+        assert result.exit_code == 0
+        assert "UUID:" in result.output
+    
+    def test_aldoni_jaro_mutual_exclusion(self, runner):
+        """Test --jaro and --jardeko cannot be used together."""
+        result = runner.invoke(app, ["aldoni", "--jaro", "1789", "--jardeko", "1780"])
+        
+        assert result.exit_code == 1
+        assert "unu el" in result.output.lower() or "only one" in result.output.lower()
+    
+    def test_aldoni_jaro_invalid(self, runner):
+        """Test --jaro with invalid value."""
+        result = runner.invoke(app, ["aldoni", "--jaro", "0"])
+        
+        assert result.exit_code == 1
+    
+    def test_aldoni_jaro_idempotent(self, runner):
+        """Test --jaro is idempotent (second call finds existing)."""
+        r1 = runner.invoke(app, ["aldoni", "--jaro", "1923"])
+        assert r1.exit_code == 0, f"First call failed: {r1.output}"
+        
+        r2 = runner.invoke(app, ["aldoni", "--jaro", "1923"])
+        assert r2.exit_code == 0, f"Second call failed: {r2.output}"
+        assert "jaron 1923" in r2.output.lower() or "year 1923" in r2.output.lower()
 
 
 class TestModifiCommand:
