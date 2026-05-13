@@ -24,9 +24,14 @@ def _compile_semantika_text_pattern(pattern: str, *, field: str) -> re.Pattern[s
 
 
 def _parse_semantika_float(raw: object, *, field: str) -> float:
-    """Parse a numeric value from a semantic condition."""
+    """Parse a numeric value from a semantic condition.
+
+    Accepts both ``,`` and ``.`` as decimal separator (matching autish-legacy
+    behavior for Esperanto locale where comma is the standard decimal mark).
+    """
+    text = str(raw or "").strip().replace(",", ".")
     try:
-        return float(str(raw or "").strip())
+        return float(text)
     except (ValueError, TypeError) as exc:
         raise ValueError(
             f"Nevalida {field}: ne povis interpreti nombron '{raw}'."
