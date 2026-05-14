@@ -32,6 +32,7 @@ FIELD_SUPPRESSIONS = {
 def render_entry_html(
     entry: dict[str, Any],
     include_fields: list[str] | None = None,
+    _link_depth: int = 0,
 ) -> str:
     """Render an encik entry as an HTML page.
 
@@ -111,12 +112,13 @@ def render_entry_html(
             continue
 
         # Resolve inline semantic arcs before markdown rendering.
-        # For dict values (difinoj, terminologio), each string entry
-        # is resolved inside _render_field before markdown rendering.
+        # link_depth=1 generates file:// URLs to linked entries' HTML.
+        # link_depth=1 is used for the top-level call; _resolve_inline_links
+        # passes link_depth+1 to prevent infinite recursion.
         if isinstance(value, str) and key not in PLAIN_FIELDS:
-            value = _resolve_inline_links(value, link_depth=0)
+            value = _resolve_inline_links(value, link_depth=_link_depth + 1)
 
-        field_html = _render_field(key, value)
+        field_html = _render_field(key, value, link_depth=_link_depth)
         if field_html:
             rows.append(f'<div class="field"><label>{key}</label>{field_html}</div>')
 
@@ -146,14 +148,15 @@ def render_entry_html(
     return html
 
 
-def _render_field(key: str, value: Any) -> str:
+def _render_field(key: str, value: Any, link_depth: int = 0) -> str:
     """Render a single field as HTML."""
     if value is None:
         return ""
 
     # Resolve inline semantic arcs in a string before markdown rendering.
+    # Use link_depth+1 so the first level generates file:// URLs.
     def _resolve(v: str) -> str:
-        return _resolve_inline_links(v, link_depth=0) if v else v
+        return _resolve_inline_links(v, link_depth=link_depth + 1) if v else v
 
     # Handle different field types
     if isinstance(value, str):
@@ -369,7 +372,7 @@ def preview_entry(
     Returns:
         Path to the rendered HTML file
     """
-    html = render_entry_html(entry)
+    html = render_entry_html(entry, _link_depth=0)
     if not title:
         _pt = entry.get("terminologio") or {}
         title = next(iter(_pt.values()), "encik")
