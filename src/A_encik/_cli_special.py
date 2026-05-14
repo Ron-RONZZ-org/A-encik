@@ -68,12 +68,12 @@ def register_commands(app: typer.Typer) -> None:
 
     @app.command("repacigi")
     def repacigi(
-        cxio: bool = typer.Option(
+        cio: bool = typer.Option(
             False,
-            "--cxio",
+            "--cio",
             "-a",
             help=tr_multi(
-                "Ankaŭ rekonstrui ligilo kaj terminologio por ĈIUJ eniroj",
+                "Ankaŭ rekonstrui ligilo kaj terminologio por ĉiuj eniroj",
                 "Also rebuild ligilo and terminologio for ALL entries",
                 "Reconstruire aussi ligilo et terminologio pour TOUTES les entrées",
             ),
@@ -81,14 +81,14 @@ def register_commands(app: typer.Typer) -> None:
     ) -> None:
         """Reconcile all bidirectional semantic links in the database.
 
-        Without --cxio: only syncs reverse superklaso→ligilo links.
-        With --cxio: also rebuilds ligilo from inline refs and
+        Without --cio: only syncs reverse superklaso→ligilo links.
+        With --cio: also rebuilds ligilo from inline refs and
         terminologio_search from terminologio for every entry.
         """
         service = get_service()
         count = service.reconcile_all_reverse_links()
 
-        if cxio:
+        if cio:
             rebuilt = service.reconcile_all_computed_fields()
             info(tr_multi(
                 f"Repacigis {count} ligilojn, rekonstruis {rebuilt} enirojn",
