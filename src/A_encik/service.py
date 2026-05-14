@@ -172,7 +172,7 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                         continue
                     if _ref_uuid == uuid:
                         continue
-                    _ligilo_map[_ref_uuid] = f"ec#{_ref_tipo}" if _ref_tipo else "ec#inline"
+                    _ligilo_map[_ref_uuid] = f"ec#{_ref_tipo}" if _ref_tipo else "ec#related"
 
         # Persist rebuilt ligilo
         _new_ligilo = [[uid, t] for uid, t in _ligilo_map.items()]
@@ -403,7 +403,7 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                         _rt = (_m.group(3) or "").strip()
                         _rt = re.sub(r":\s+", ":", _rt)
                         if _ru and len(_ru) >= 8 and _ru != entry_uuid:
-                            ligilo_map[_ru] = f"ec#{_rt}" if _rt else "ec#inline"
+                            ligilo_map[_ru] = f"ec#{_rt}" if _rt else "ec#related"
 
             new_ligilo = [[u, t] for u, t in ligilo_map.items()]
             updates["ligilo"] = json.dumps(new_ligilo, ensure_ascii=False)
