@@ -101,10 +101,10 @@ def register_commands(app: typer.Typer) -> None:
             "--lingvo",
             help=tr_multi("Kodo de lingvo", "Language code", "Code de langue"),
         ),
-        cxio: bool = typer.Option(
+        cio: bool = typer.Option(
             False,
             "-a",
-            "--cxio",
+            "--cio",
             help=tr_multi("Montri ĉiujn disponeblajn lingvojn kaj kampojn", "Show all available languages and fields", "Afficher toutes les langues et champs disponibles"),
         ),
         html: bool = typer.Option(
@@ -164,7 +164,7 @@ def register_commands(app: typer.Typer) -> None:
         selected_lang = (lingvo or "").strip().lower() or preferred_lang(
             entry.get("terminologio") or {}, entry.get("difinoj") or {}
         )
-        display_entry_panel(entry, selected_lang=selected_lang, cxio=cxio)
+        display_entry_panel(entry, selected_lang=selected_lang, cxio=cio)
 
     @app.command("modifi")
     def modifi(
