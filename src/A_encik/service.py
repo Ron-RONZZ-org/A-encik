@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from A.core.service import CRUDService
@@ -134,7 +135,12 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
 
         # 2. Parse inline refs and merge into entry["ligilo"] for display.
         #    This ensures inline semantic links [text](#uuid, prop) appear
-        #    in the ligilo section of vidi output.
+        #    in the ligilo section of vidi output with the correct arc type.
+        _INLINE_LINK_RE = re.compile(
+            r'\[([^\]]*)\]\(#([0-9a-f-]+)\s*(?:,\s*([^)]+))?\)',
+            re.IGNORECASE,
+        )
+
         inline_refs: list[dict] = []
         seen_uuids: set[str] = set()
         # Collect existing explicit ligilo UUIDs
@@ -146,20 +152,22 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                     seen_uuids.add(_uid)
 
         for _fv in text_fields.values():
+            _strings: list[str] = []
             if isinstance(_fv, str):
-                _refs = _parse_refs(_fv)
-                for _r in _refs:
-                    if _r.uuid and _r.uuid != uuid and _r.uuid not in seen_uuids:
-                        seen_uuids.add(_r.uuid)
-                        inline_refs.append([_r.uuid, "ec#inline"])
+                _strings = [_fv]
             elif isinstance(_fv, dict):
-                for _v in _fv.values():
-                    if isinstance(_v, str):
-                        _refs = _parse_refs(_v)
-                        for _r in _refs:
-                            if _r.uuid and _r.uuid != uuid and _r.uuid not in seen_uuids:
-                                seen_uuids.add(_r.uuid)
-                                inline_refs.append([_r.uuid, "ec#inline"])
+                _strings = [str(_v) for _v in _fv.values() if isinstance(_v, str)]
+            for _s in _strings:
+                for _m in _INLINE_LINK_RE.finditer(_s):
+                    _ref_uuid = _m.group(2).strip().lower()
+                    _ref_tipo = (_m.group(3) or "").strip()
+                    # Validate UUID (8+ hex chars)
+                    if not _ref_uuid or len(_ref_uuid) < 8 or not all(c in '0123456789abcdef-' for c in _ref_uuid):
+                        continue
+                    if _ref_uuid not in seen_uuids and _ref_uuid != uuid:
+                        seen_uuids.add(_ref_uuid)
+                        tipo = f"ec#{_ref_tipo}" if _ref_tipo else "ec#inline"
+                        inline_refs.append([_ref_uuid, tipo])
 
         if inline_refs:
             merged = list(_existing_ligilo) + inline_refs if isinstance(_existing_ligilo, list) else inline_refs
