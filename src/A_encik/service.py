@@ -98,7 +98,15 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
             remove_entry_links("encik", uuid)
 
     def _sync_links(self, entry: dict) -> None:
-        """Sync ligiloj + inline refs to A.core.links."""
+        """Sync inline refs from text fields to both A.core.links and entry ligilo.
+
+        Inline semantic links (``[text](#uuid, prop)``) in difinoj/enhavo text
+        are parsed and stored in two places:
+        1. ``A.core.links`` — cross-module link database (for backlinks)
+        2. ``entry["ligilo"]`` — per-entry JSON column (for display in vidi)
+        """
+        from A.core.references import parse_refs as _parse_refs
+
         uuid = entry["uuid"]
         ligiloj = entry.get("ligiloj") or []
         if isinstance(ligiloj, str):
@@ -116,12 +124,51 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         if entry.get("difinio"):
             text_fields["difinio"] = entry["difinio"]
 
+        # 1. Sync to A.core.links (cross-module backlinks)
         sync_links_for_entry(
             uuid=uuid,
             source_type="encik",
             text_fields=text_fields,
             explicit_links=ligiloj if isinstance(ligiloj, list) else [],
         )
+
+        # 2. Parse inline refs and merge into entry["ligilo"] for display.
+        #    This ensures inline semantic links [text](#uuid, prop) appear
+        #    in the ligilo section of vidi output.
+        inline_refs: list[dict] = []
+        seen_uuids: set[str] = set()
+        # Collect existing explicit ligilo UUIDs
+        _existing_ligilo = entry.get("ligilo") or []
+        if isinstance(_existing_ligilo, list):
+            for _item in _existing_ligilo:
+                _uid = _item[0] if isinstance(_item, list) else _item
+                if isinstance(_uid, str):
+                    seen_uuids.add(_uid)
+
+        for _fv in text_fields.values():
+            if isinstance(_fv, str):
+                _refs = _parse_refs(_fv)
+                for _r in _refs:
+                    if _r.uuid and _r.uuid != uuid and _r.uuid not in seen_uuids:
+                        seen_uuids.add(_r.uuid)
+                        inline_refs.append([_r.uuid, "ec#inline"])
+            elif isinstance(_fv, dict):
+                for _v in _fv.values():
+                    if isinstance(_v, str):
+                        _refs = _parse_refs(_v)
+                        for _r in _refs:
+                            if _r.uuid and _r.uuid != uuid and _r.uuid not in seen_uuids:
+                                seen_uuids.add(_r.uuid)
+                                inline_refs.append([_r.uuid, "ec#inline"])
+
+        if inline_refs:
+            merged = list(_existing_ligilo) + inline_refs if isinstance(_existing_ligilo, list) else inline_refs
+            entry["ligilo"] = merged
+            # Persist back to database so ligilo is visible next time
+            self.db.execute(
+                "UPDATE encik SET ligilo = ? WHERE uuid = ?",
+                (json.dumps(merged, ensure_ascii=False), uuid),
+            )
 
     def get(self, uuid: str) -> dict[str, Any] | None:
         """Get entry by UUID with prefix fallback."""
