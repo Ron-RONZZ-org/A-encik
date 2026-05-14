@@ -351,6 +351,74 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
             old_ligilo = data.get("ligilo", [])
             self._remove_stale_reverse_links(uuid, old_ligilo)
 
+    def reconcile_all_computed_fields(self) -> int:
+        """Rebuild `ligilo` and `terminologio_search` for EVERY entry.
+
+        Reads each entry from the database, re-parses inline refs from
+        text fields to rebuild ``entry["ligilo"]``, and recomputes
+        ``terminologio_search`` from the current ``terminologio``.
+        Then persists both back to the database.
+
+        This is the bulk fix for entries that were imported with older
+        code that didn't properly sync inline links or search data.
+
+        Returns:
+            Number of entries updated.
+        """
+        rows = self.db.execute("SELECT * FROM encik")
+        count = 0
+        for row in rows:
+            entry = self._deserialize_row(row)
+            entry_uuid = entry.get("uuid", "")
+            if not entry_uuid:
+                continue
+
+            # Recompute terminologio_search
+            term = entry.get("terminologio") or {}
+            ts = self._ensure_terminologio_search(term)
+            updates: dict[str, Any] = {"terminologio_search": ts}
+
+            # Rebuild ligilo from inline refs
+            text_fields: dict[str, Any] = {
+                "difinoj": entry.get("difinoj") or {},
+                "enhavo": entry.get("enhavo") or "",
+            }
+            if entry.get("difinio"):
+                text_fields["difinio"] = entry["difinio"]
+
+            _INLINE_LINK_RE = re.compile(
+                r'\[([^\]]*)\]\(#([0-9a-f-]+)\s*(?:,\s*([^)]+))?\)',
+                re.IGNORECASE,
+            )
+            ligilo_map: dict[str, str] = {}
+            for _fv in text_fields.values():
+                _vals: list[str] = []
+                if isinstance(_fv, str):
+                    _vals = [_fv]
+                elif isinstance(_fv, dict):
+                    _vals = [str(_v) for _v in _fv.values() if isinstance(_v, str)]
+                for _s in _vals:
+                    for _m in _INLINE_LINK_RE.finditer(_s):
+                        _ru = _m.group(2).strip().lower()
+                        _rt = (_m.group(3) or "").strip()
+                        _rt = re.sub(r":\s+", ":", _rt)
+                        if _ru and len(_ru) >= 8 and _ru != entry_uuid:
+                            ligilo_map[_ru] = f"ec#{_rt}" if _rt else "ec#inline"
+
+            new_ligilo = [[u, t] for u, t in ligilo_map.items()]
+            updates["ligilo"] = json.dumps(new_ligilo, ensure_ascii=False)
+
+            # Persist
+            set_clauses = [f"{k} = ?" for k in updates]
+            values = list(updates.values()) + [entry_uuid]
+            self.db.execute(
+                f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE uuid = ?",
+                values,
+            )
+            count += 1
+
+        return count
+
     def reconcile_all_reverse_links(self) -> int:
         """Manually reconcile all bidirectional links in the database."""
         count = 0

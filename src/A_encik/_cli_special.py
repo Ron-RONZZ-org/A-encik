@@ -67,11 +67,40 @@ def register_commands(app: typer.Typer) -> None:
                 console.print(f"  {edge['type']}: {edge.get('to', '')[:8]}")
 
     @app.command("repacigi")
-    def repacigi() -> None:
-        """Reconcile all bidirectional semantic links in the database."""
+    def repacigi(
+        cxio: bool = typer.Option(
+            False,
+            "--cxio",
+            "-a",
+            help=tr_multi(
+                "Ankaŭ rekonstrui ligilo kaj terminologio por ĈIUJ eniroj",
+                "Also rebuild ligilo and terminologio for ALL entries",
+                "Reconstruire aussi ligilo et terminologio pour TOUTES les entrées",
+            ),
+        ),
+    ) -> None:
+        """Reconcile all bidirectional semantic links in the database.
+
+        Without --cxio: only syncs reverse superklaso→ligilo links.
+        With --cxio: also rebuilds ligilo from inline refs and
+        terminologio_search from terminologio for every entry.
+        """
         service = get_service()
         count = service.reconcile_all_reverse_links()
-        info(tr_multi(f"Repacigis {count} ligilojn", f"Reconciled {count} links", f"Réconcilié {count} liens"))
+
+        if cxio:
+            rebuilt = service.reconcile_all_computed_fields()
+            info(tr_multi(
+                f"Repacigis {count} ligilojn, rekonstruis {rebuilt} enirojn",
+                f"Reconciled {count} links, rebuilt {rebuilt} entries",
+                f"Réconcilié {count} liens, reconstruit {rebuilt} entrées",
+            ))
+        else:
+            info(tr_multi(
+                f"Repacigis {count} ligilojn",
+                f"Reconciled {count} links",
+                f"Réconcilié {count} liens",
+            ))
 
     @app.command("eksporti")
     def eksporti(
