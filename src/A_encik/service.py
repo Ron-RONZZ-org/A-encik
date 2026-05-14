@@ -133,29 +133,30 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
             explicit_links=ligiloj if isinstance(ligiloj, list) else [],
         )
 
-        # 2. Parse inline refs and merge into entry["ligilo"] for display.
-        #    This ensures inline semantic links [text](#uuid, prop) appear
-        #    in the ligilo section of vidi output with the correct arc type.
+        # 2. Rebuild entry["ligilo"] from current text and explicit ligilo.
+        #    Start with any explicit ligilo from the update data (if present),
+        #    then overlay with inline refs from text fields. This ensures that
+        #    changes to inline links in the .enc file are reflected exactly.
         _INLINE_LINK_RE = re.compile(
             r'\[([^\]]*)\]\(#([0-9a-f-]+)\s*(?:,\s*([^)]+))?\)',
             re.IGNORECASE,
         )
 
-        # Build uuid→tipo map from existing ligilo (for update-in-place)
-        _existing_ligilo = entry.get("ligilo") or []
-        if isinstance(_existing_ligilo, str):
-            try:
-                _existing_ligilo = json.loads(_existing_ligilo)
-            except (json.JSONDecodeError, ValueError):
-                _existing_ligilo = []
+        # Seed map with explicit ligilo from the update data (not old DB)
         _ligilo_map: dict[str, str] = {}
-        for _item in (_existing_ligilo if isinstance(_existing_ligilo, list) else []):
+        _explicit = entry.get("ligilo") or []
+        if isinstance(_explicit, str):
+            try:
+                _explicit = json.loads(_explicit)
+            except (json.JSONDecodeError, ValueError):
+                _explicit = []
+        for _item in (_explicit if isinstance(_explicit, list) else []):
             _uid = _item[0] if isinstance(_item, list) else _item
-            _tipo = _item[1] if isinstance(_item, list) and len(_item) > 1 else ""
-            if isinstance(_uid, str) and _uid:
-                # Keep existing tipo unless it's a generic fallback
+            _tipo = str(_item[1]) if isinstance(_item, list) and len(_item) > 1 else ""
+            if isinstance(_uid, str) and len(_uid) >= 8:
                 _ligilo_map[_uid] = _tipo
 
+        # Overlay inline refs from text (last occurrence wins)
         for _fv in text_fields.values():
             _strings: list[str] = []
             if isinstance(_fv, str):
@@ -166,22 +167,20 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                 for _m in _INLINE_LINK_RE.finditer(_s):
                     _ref_uuid = _m.group(2).strip().lower()
                     _ref_tipo = (_m.group(3) or "").strip()
-                    # Normalize semantic arc: "wdt: P194" → "wdt:P194"
                     _ref_tipo = re.sub(r":\s+", ":", _ref_tipo)
                     if not _ref_uuid or len(_ref_uuid) < 8:
                         continue
                     if _ref_uuid == uuid:
                         continue
-                    # New semantic tipo from this link (e.g. "wdt:P194")
-                    _new_tipo = f"ec#{_ref_tipo}" if _ref_tipo else ""
-                    _old_tipo = _ligilo_map.get(_ref_uuid, "")
-                    # Prefer the new tipo unless it's empty or old is already specific
-                    if _ref_tipo and (not _old_tipo or "inline" in _old_tipo):
-                        _ligilo_map[_ref_uuid] = _new_tipo
-                    elif not _ref_tipo and not _old_tipo:
-                        _ligilo_map[_ref_uuid] = "ec#inline"
-                    elif _ref_uuid not in _ligilo_map:
-                        _ligilo_map[_ref_uuid] = "ec#inline"
+                    _ligilo_map[_ref_uuid] = f"ec#{_ref_tipo}" if _ref_tipo else "ec#inline"
+
+        # Persist rebuilt ligilo
+        _new_ligilo = [[uid, t] for uid, t in _ligilo_map.items()]
+        entry["ligilo"] = _new_ligilo
+        self.db.execute(
+            "UPDATE encik SET ligilo = ? WHERE uuid = ?",
+            (json.dumps(_new_ligilo, ensure_ascii=False), uuid),
+        )
 
         # Rebuild ligilo list from map
         _new_ligilo = [[uid, tipo] for uid, tipo in _ligilo_map.items()]
