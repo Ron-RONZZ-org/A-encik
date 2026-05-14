@@ -151,28 +151,58 @@ def semantika_ligilo_serci(
         return
 
     if local_matches:
-        info(tr_multi("Lokaj rezultoj:", "Local results:", "Résultats locaux :"))
+        from rich.table import Table
+        table = Table(
+            title=tr_multi(
+                "Lokaj rezultoj",
+                "Local results",
+                "Résultats locaux",
+            ),
+            show_header=True,
+            header_style="bold cyan",
+            box=None,
+            expand=False,
+        )
+        table.add_column("ID", style="cyan", no_wrap=True, width=16)
+        table.add_column(tr_multi("Priskribo", "Description", "Description"))
+        table.add_column(tr_multi("Grupo", "Group", "Groupe"))
+        table.add_column(tr_multi("Aliazoj", "Aliases", "Alias"), width=30)
         for m in local_matches:
             ligilo = str(m.get("ligilo") or "")
-            priskribo = str(m.get("priskribo") or "")
-            grupo = str(m.get("grupo") or "")
-            aliases = ", ".join(str(a) for a in (m.get("aliasoj") or []))
-            console.print(f"  [cyan]{ligilo}[/] — {priskribo}")
-            if aliases:
-                console.print(f"    [dim]aliazoj: {aliases} (grupo: {grupo})[/dim]")
+            priskribo = str(m.get("priskribo") or "-")
+            grupo = str(m.get("grupo") or "-")
+            aliases = ", ".join(str(a) for a in (m.get("aliasoj") or [])[:3])
+            if len((m.get("aliasoj") or [])) > 3:
+                aliases += ", ..."
+            table.add_row(ligilo, priskribo, grupo, aliases or "-")
+        console.print(table)
 
     if wikidata_matches:
-        info(tr_multi("Wikidata rezultoj:", "Wikidata results:", "Résultats Wikidata :"))
+        from rich.table import Table
+        table = Table(
+            title=tr_multi(
+                "Wikidata rezultoj",
+                "Wikidata results",
+                "Résultats Wikidata",
+            ),
+            show_header=True,
+            header_style="bold cyan",
+            box=None,
+            expand=False,
+        )
+        table.add_column("ID", style="cyan", no_wrap=True, width=16)
+        table.add_column(tr_multi("Etikedo", "Label", "Étiquette"))
+        table.add_column(tr_multi("Priskribo", "Description", "Description"))
+        table.add_column(tr_multi("Aliazoj", "Aliases", "Alias"), width=30)
         for m in wikidata_matches:
             ligilo = str(m.get("ligilo") or "")
-            etikedo = str(m.get("etikedo") or "")
-            priskribo = str(m.get("priskribo") or "")
-            aliases = ", ".join(str(a) for a in (m.get("aliasoj") or []))
-            console.print(f"  [cyan]{ligilo}[/] — {etikedo}")
-            if priskribo:
-                console.print(f"    {priskribo}")
-            if aliases:
-                console.print(f"    [dim]aliazoj: {aliases}[/dim]")
+            etikedo = str(m.get("etikedo") or "-")
+            priskribo = str(m.get("priskribo") or "-")
+            aliase = ", ".join(str(a) for a in (m.get("aliasoj") or [])[:3])
+            if len((m.get("aliasoj") or [])) > 3:
+                aliase += ", ..."
+            table.add_row(ligilo, etikedo, priskribo, aliase or "-")
+        console.print(table)
 
     if wikidata_warning:
         info(f"[dim]{wikidata_warning}[/dim]")
