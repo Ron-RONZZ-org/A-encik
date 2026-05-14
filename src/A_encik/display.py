@@ -495,8 +495,9 @@ def display_entry_panel(
         for item in ligilo_items:
             tipo = item.get("tipo") or ""
             linked_title = item.get("titolo") or tr_multi("ne trovita", "not found", "non trouvé")
-            linked_uuid = item["uuid"][:8]
-            lines.append(f"  [dim]{tipo:<{LW}}[/dim] {linked_title}  [dim]#{linked_uuid}[/dim]")
+            # Strip ec# prefix for display (legacy format: "wdt:P366", not "ec#wdt:P366")
+            tipo_display = tipo[3:] if tipo.startswith("ec#") else tipo
+            lines.append(f"  [dim]{tipo_display:<{LW-4}}[/dim] {linked_title}")
 
     fonto = entry.get("fonto") or []
     if isinstance(fonto, str):
