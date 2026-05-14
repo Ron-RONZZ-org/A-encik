@@ -141,15 +141,20 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
             re.IGNORECASE,
         )
 
-        inline_refs: list[dict] = []
-        seen_uuids: set[str] = set()
-        # Collect existing explicit ligilo UUIDs
+        # Build uuid→tipo map from existing ligilo (for update-in-place)
         _existing_ligilo = entry.get("ligilo") or []
-        if isinstance(_existing_ligilo, list):
-            for _item in _existing_ligilo:
-                _uid = _item[0] if isinstance(_item, list) else _item
-                if isinstance(_uid, str):
-                    seen_uuids.add(_uid)
+        if isinstance(_existing_ligilo, str):
+            try:
+                _existing_ligilo = json.loads(_existing_ligilo)
+            except (json.JSONDecodeError, ValueError):
+                _existing_ligilo = []
+        _ligilo_map: dict[str, str] = {}
+        for _item in (_existing_ligilo if isinstance(_existing_ligilo, list) else []):
+            _uid = _item[0] if isinstance(_item, list) else _item
+            _tipo = _item[1] if isinstance(_item, list) and len(_item) > 1 else ""
+            if isinstance(_uid, str) and _uid:
+                # Keep existing tipo unless it's a generic fallback
+                _ligilo_map[_uid] = _tipo
 
         for _fv in text_fields.values():
             _strings: list[str] = []
@@ -161,22 +166,30 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                 for _m in _INLINE_LINK_RE.finditer(_s):
                     _ref_uuid = _m.group(2).strip().lower()
                     _ref_tipo = (_m.group(3) or "").strip()
-                    # Validate UUID (8+ hex chars)
-                    if not _ref_uuid or len(_ref_uuid) < 8 or not all(c in '0123456789abcdef-' for c in _ref_uuid):
+                    # Normalize semantic arc: "wdt: P194" → "wdt:P194"
+                    _ref_tipo = re.sub(r":\s+", ":", _ref_tipo)
+                    if not _ref_uuid or len(_ref_uuid) < 8:
                         continue
-                    if _ref_uuid not in seen_uuids and _ref_uuid != uuid:
-                        seen_uuids.add(_ref_uuid)
-                        tipo = f"ec#{_ref_tipo}" if _ref_tipo else "ec#inline"
-                        inline_refs.append([_ref_uuid, tipo])
+                    if _ref_uuid == uuid:
+                        continue
+                    # New semantic tipo from this link (e.g. "wdt:P194")
+                    _new_tipo = f"ec#{_ref_tipo}" if _ref_tipo else ""
+                    _old_tipo = _ligilo_map.get(_ref_uuid, "")
+                    # Prefer the new tipo unless it's empty or old is already specific
+                    if _ref_tipo and (not _old_tipo or "inline" in _old_tipo):
+                        _ligilo_map[_ref_uuid] = _new_tipo
+                    elif not _ref_tipo and not _old_tipo:
+                        _ligilo_map[_ref_uuid] = "ec#inline"
+                    elif _ref_uuid not in _ligilo_map:
+                        _ligilo_map[_ref_uuid] = "ec#inline"
 
-        if inline_refs:
-            merged = list(_existing_ligilo) + inline_refs if isinstance(_existing_ligilo, list) else inline_refs
-            entry["ligilo"] = merged
-            # Persist back to database so ligilo is visible next time
-            self.db.execute(
-                "UPDATE encik SET ligilo = ? WHERE uuid = ?",
-                (json.dumps(merged, ensure_ascii=False), uuid),
-            )
+        # Rebuild ligilo list from map
+        _new_ligilo = [[uid, tipo] for uid, tipo in _ligilo_map.items()]
+        entry["ligilo"] = _new_ligilo
+        self.db.execute(
+            "UPDATE encik SET ligilo = ? WHERE uuid = ?",
+            (json.dumps(_new_ligilo, ensure_ascii=False), uuid),
+        )
 
     def get(self, uuid: str) -> dict[str, Any] | None:
         """Get entry by UUID with prefix fallback."""
