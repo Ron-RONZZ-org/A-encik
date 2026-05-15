@@ -244,6 +244,13 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         a .enc file, and this finds any existing entry that has a matching
         term in ANY language.
 
+        Uses a two-pass approach:
+        1. Fast SQL ``LIKE`` on the concatenated ``terminologio_search`` column
+           to get candidates.
+        2. Python verification that at least one folded query term matches a
+           COMPLETE folded terminologio value (not just a substring). This
+           avoids false positives like ``"tax"`` matching ``"taxonomy"``.
+
         Args:
             terminologio: Dict like ``{"eo": "Francio", "en": "France"}``
 
@@ -254,14 +261,27 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         values = [v for v in terminologio.values() if v]
         if not values:
             return None
+
+        # Pass 1: fast SQL LIKE on concatenated column
         conditions = " OR ".join(["terminologio_search LIKE ?"] * len(values))
         params = [f"%{_fold(v)}%" for v in values]
-        row = self.db.execute_one(
-            f"SELECT * FROM {self.table} WHERE {conditions} LIMIT 1",
+        candidates = self.db.execute(
+            f"SELECT * FROM {self.table} WHERE {conditions} LIMIT 20",
             params,
         )
-        if row:
-            return self._deserialize_row(row)
+
+        # Pass 2: Python verification — exact (folded) match against each
+        # individual terminologio value, not substrings.
+        folded_queries = {_fold(v) for v in values}
+        for row in candidates:
+            entry = self._deserialize_row(row)
+            entry_values = [
+                str(v) for v in entry.get("terminologio", {}).values() if v
+            ]
+            entry_folded = {_fold(v) for v in entry_values}
+            if folded_queries & entry_folded:
+                return entry
+
         return None
 
     def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
