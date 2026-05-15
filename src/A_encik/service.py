@@ -281,6 +281,94 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         rows = super().search_fts(query, filters, order_by, limit, offset)
         return [self._deserialize_row(row) for row in rows]
 
+    def search_ranked(
+        self,
+        query: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Ranked search across all text fields.
+
+        Priority:
+        1. Title match (terminologio — exact accent-folded)
+        2. Compactness (shorter text with query near start)
+        3. Recency (newest entries first)
+
+        Uses FTS5 BM25 when ``--teksto`` is needed (via ``search_fts``),
+        otherwise relies on ``LIKE`` with SQL-level ordering + Python
+        compactness re-scoring on the top results (avoids full-table scan).
+
+        Args:
+            query: Search text.
+            limit: Max results.
+
+        Returns:
+            Ranked list of matching entries.
+        """
+        from A.utils.normalize import fold_search_text as _fold
+        folded = _fold(query)
+        if not folded:
+            return []
+
+        # Phase 1: SQL-level filter + primary sort
+        # Use LIKE on terminologio_search (all langs, folded), then
+        # order by: title prefix match > general match > recency.
+        pattern = f"%{folded}%"
+        prefix = f"{folded}%"
+        rows = self.db.execute(
+            """SELECT *, (
+                CASE WHEN terminologio_search LIKE ? THEN 0
+                     ELSE 1 END
+            ) AS match_rank
+            FROM encik
+            WHERE terminologio_search LIKE ?
+            ORDER BY match_rank ASC, kreita_je DESC
+            LIMIT ?""",
+            (prefix, pattern, limit),
+        )
+        entries = [self._deserialize_row(row) for row in rows]
+
+        if not entries:
+            # Fallback: search difinio/enhavo raw
+            rows = self.db.execute(
+                "SELECT * FROM encik WHERE difinio LIKE ? OR enhavo LIKE ? ORDER BY kreita_je DESC LIMIT ?",
+                (f"%{query}%", f"%{query}%", limit),
+            )
+            entries = [self._deserialize_row(row) for row in rows]
+
+        # Phase 2: Python-side compactness re-scoring on top N only
+        # (avoids loading/ranking the entire database).
+        if len(entries) <= 1:
+            return entries
+
+        def _compactness(text: str, needle: str) -> int:
+            """Lower = better match (query appears near start with little padding)."""
+            folded_text = _fold(text)
+            idx = folded_text.find(needle)
+            if idx < 0:
+                return 10**9
+            return idx
+
+        for e in entries:
+            # Collect all text fields for compactness scoring
+            texts: list[str] = []
+            term = e.get("terminologio") or {}
+            texts.extend(str(v) for v in term.values() if v)
+            dif = e.get("difinoj") or {}
+            texts.extend(str(v) for v in dif.values() if v)
+            if e.get("enhavo"):
+                texts.append(str(e["enhavo"]))
+            if e.get("difinio"):
+                texts.append(str(e["difinio"]))
+
+            best = min(_compactness(t, folded) for t in texts if t)
+            e["_compactness"] = best
+
+        # Sort: compactness ascending, then recency descending
+        entries.sort(key=lambda e: (e.get("_compactness", 10**9),
+                                     -(e.get("kreita_je") or "")))
+
+        return entries[:limit]
+
     def search_like(
         self,
         query: str,
@@ -291,14 +379,14 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         folded = _fold(query)
         if folded:
             rows = self.db.execute(
-                "SELECT * FROM encik WHERE terminologio_search LIKE ? LIMIT ?",
+                "SELECT * FROM encik WHERE terminologio_search LIKE ? ORDER BY kreita_je DESC LIMIT ?",
                 (f"%{folded}%", limit),
             )
             if rows:
                 return [self._deserialize_row(row) for row in rows]
         pattern = f"%{query}%"
         rows = self.db.execute(
-            "SELECT * FROM encik WHERE difinio LIKE ? OR enhavo LIKE ? LIMIT ?",
+            "SELECT * FROM encik WHERE difinio LIKE ? OR enhavo LIKE ? ORDER BY kreita_je DESC LIMIT ?",
             (pattern, pattern, limit),
         )
         return [self._deserialize_row(row) for row in rows]

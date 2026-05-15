@@ -167,7 +167,7 @@ def register_commands(app: typer.Typer) -> None:
             if teksto:
                 entries = service.search_fts(demando, limit=limo)
             else:
-                entries = service.search_like(demando, limit=limo)
+                entries = service.search_ranked(demando, limit=limo)
 
             if not entries:
                 info(tr_multi("Neniuj rezultoj", "No results", "Aucun résultat"))
