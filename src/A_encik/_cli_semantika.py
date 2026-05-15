@@ -53,6 +53,7 @@ def _print_semantika_kategorio(kategorio: str) -> None:
         show_header=True,
         header_style="bold",
         expand=False,
+        box=BOX_SIMPLE,
     )
     table.add_column("LIGILO", style="cyan", no_wrap=True)
     table.add_column(tr_multi("PRISKRIBO", "Description"), style="white")
@@ -160,7 +161,7 @@ def semantika_ligilo_serci(
             ),
             show_header=True,
             header_style="bold cyan",
-            box=None,
+            box=BOX_SIMPLE,
             expand=False,
         )
         table.add_column("ID", style="cyan", no_wrap=True, width=16)
@@ -187,7 +188,7 @@ def semantika_ligilo_serci(
             ),
             show_header=True,
             header_style="bold cyan",
-            box=None,
+            box=BOX_SIMPLE,
             expand=False,
         )
         table.add_column("ID", style="cyan", no_wrap=True, width=16)
@@ -310,6 +311,7 @@ def semantika_ls() -> None:
         show_header=True,
         header_style="bold",
         expand=False,
+        box=BOX_SIMPLE,
     )
     table.add_column(tr_multi("Grupo", "Group"), style="cyan", no_wrap=True)
     table.add_column(tr_multi("Eniroj", "Entries"), justify="right")

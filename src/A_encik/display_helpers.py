@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from rich.table import Table
+from rich.box import SIMPLE as BOX_SIMPLE
 from rich.text import Text
 
 from A import info, copy_to_clipboard, tr_multi
@@ -318,7 +319,7 @@ def print_candidates_table(
 
     Uses :func:`entry_locale_title` for the title column.
     """
-    table = Table(show_header=True, box=None)
+    table = Table(show_header=True, box=BOX_SIMPLE)
     table.add_column("#", width=3)
     table.add_column("UUID", width=10)
     table.add_column("Titolo")
