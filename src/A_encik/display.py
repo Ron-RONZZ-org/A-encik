@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from A.core.markdown_parser import render_markdown
-from A.core.markdown_html_view import preview_html
+from A.core.markdown_html_view import preview_html, KATEX_HTML
 from A.utils.output import info
 
 
@@ -43,8 +43,8 @@ def render_entry_html(
     Returns:
         HTML string with rendered markdown fields
     """
-    term = entry.get("terminologio") or {}
-    title = next(iter(term.values()), entry.get("uuid", "Unkonata"))
+    from A_encik.display_helpers import entry_locale_title
+    title = entry_locale_title(entry) or entry.get("uuid", "Unkonata")
     created = entry.get("kreita_je", "")
     modified = entry.get("modifita_je", "")
 
@@ -129,6 +129,7 @@ def render_entry_html(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{_escape_html(str(title))}</title>
+    {KATEX_HTML}
     <style>
         body {{ font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
         h1 {{ color: #333; }}
@@ -233,6 +234,7 @@ def _resolve_inline_links(md_text: str, link_depth: int = 0) -> str:
     """
     import re as _re
     from A_encik.service import get_service as _get_svc
+    from A_encik.display_helpers import entry_locale_title as _elt
 
     def _replace(m: _re.Match) -> str:
         label = m.group(1).strip()
@@ -251,7 +253,8 @@ def _resolve_inline_links(md_text: str, link_depth: int = 0) -> str:
             # Render target entry HTML and link as file URL.
             # Pass _link_depth to prevent re-entering this branch.
             target_html = render_entry_html(target, include_fields=None, _link_depth=link_depth)
-            target_path = preview_html(target_html, open_browser=False, title=target.get("titolo", "encik"))
+            _target_title = _elt(target) or "encik"
+            target_path = preview_html(target_html, open_browser=False, title=_target_title)
             return f"[{label}](file://{target_path})"
         # Simple markdown link to fragment
         return f"[{label}](#{short})"
@@ -296,13 +299,15 @@ def render_linked_graph_html(
     edges = graph.get("edges", [])
 
     # Build vis.js datasets
+    from A_encik.display_helpers import entry_locale_title as _elt
     js_nodes = []
     for n in nodes:
-        _titolo = _escape_html(n.get("titolo", "") or n["uuid"][:8])
+        _label = _elt(n) or n.get("titolo", "") or n["uuid"][:8]
+        _label_esc = _escape_html(_label)
         _uuid = n["uuid"]
         _depth = n.get("depth", 0)
         js_nodes.append(
-            f'{{id: "{_uuid}", label: "{_titolo}", group: {_depth}}}'
+            f'{{id: "{_uuid}", label: "{_label_esc}", group: {_depth}}}'
         )
 
     js_edges = []
@@ -315,8 +320,7 @@ def render_linked_graph_html(
     nodes_json = "[\n    " + ",\n    ".join(js_nodes) + "\n  ]"
     edges_json = "[\n    " + ",\n    ".join(js_edges) + "\n  ]"
 
-    _graph_term = entry.get("terminologio") or {}
-    _graph_title_str = next(iter(_graph_term.values()), "encik")
+    _graph_title_str = _elt(entry) or "encik"
     title = _escape_html(_graph_title_str)
 
     return f"""<!DOCTYPE html>
@@ -378,8 +382,8 @@ def preview_entry(
     """
     html = render_entry_html(entry, _link_depth=0)
     if not title:
-        _pt = entry.get("terminologio") or {}
-        title = next(iter(_pt.values()), "encik")
+        from A_encik.display_helpers import entry_locale_title
+        title = entry_locale_title(entry) or "encik"
     return preview_html(html, open_browser=open_browser, title=title)
 
 

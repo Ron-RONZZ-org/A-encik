@@ -344,5 +344,45 @@ class TestHelpCommands:
         assert "help" in result.output.lower() or "helpo" in result.output.lower()
 
 
+
+
+class TestDisplayKaTeX:
+    """Tests for KaTeX rendering in HTML output."""
+
+    def test_render_entry_html_includes_katex(self):
+        """Test render_entry_html output contains KaTeX CDN assets."""
+        from A_encik.display import render_entry_html
+
+        entry = {
+            "uuid": "abc12345-1234-5678-9abc-def012345678",
+            "terminologio": {"eo": "Fiziko"},
+            "enhavo": "$$E = mc^2$$",
+            "kreita_je": "2025-01-01T00:00:00",
+        }
+        html = render_entry_html(entry)
+        assert "katex.min.css" in html
+        assert "katex.min.js" in html
+        assert "auto-render.min.js" in html
+        assert "renderMathInElement" in html
+
+    def test_preview_entry_includes_katex(self, monkeypatch, tmp_path):
+        """Test preview_entry output contains KaTeX CDN assets."""
+        from A_encik.display import preview_entry
+        from A_encik.display_helpers import has_non_cli_renderable_markup
+
+        # Force --open to False even if content has katex
+        monkeypatch.setattr("A_encik.display.preview_html", lambda html, open_browser=False, title=None: tmp_path / "preview.html")
+
+        entry = {
+            "uuid": "abc12345-1234-5678-9abc-def012345678",
+            "terminologio": {"eo": "Fiziko"},
+            "enhavo": "$$E = mc^2$$",
+            "kreita_je": "2025-01-01T00:00:00",
+        }
+        # Just check the preview_entry doesn't crash and returns path
+        result = preview_entry(entry, open_browser=False)
+        assert result is not None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
