@@ -244,9 +244,13 @@ def _resolve_inline_links(md_text: str, link_depth: int = 0) -> str:
         if not target:
             return f"{label} (#{ref_token[:8]})"
         short = target["uuid"][:8]
+        if link_depth > 2:
+            # Prevent infinite recursion: at depth > 2 fall back to fragment
+            return f"[{label}](#{short})"
         if link_depth > 0:
-            # Render target entry HTML and link as file URL
-            target_html = render_entry_html(target, include_fields=None)
+            # Render target entry HTML and link as file URL.
+            # Pass _link_depth to prevent re-entering this branch.
+            target_html = render_entry_html(target, include_fields=None, _link_depth=link_depth)
             target_path = preview_html(target_html, open_browser=False, title=target.get("titolo", "encik"))
             return f"[{label}](file://{target_path})"
         # Simple markdown link to fragment
