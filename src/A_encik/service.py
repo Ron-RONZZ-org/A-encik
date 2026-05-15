@@ -364,12 +364,16 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                     best = idx
             e["_compactness"] = best
 
-        # Sort: frequency desc → compactness asc → recency desc
+        # Sort: recency desc → compactness asc → frequency desc
+        # kreita_je is TEXT (ISO format, e.g. "2026-05-12T12:35:03").
+        # Negating a string raises TypeError, so use reverse=True and
+        # negate the other keys instead.
         entries.sort(key=lambda e: (
-            -(e.get("_frequency", 0)),                     # more matches first
+            e.get("kreita_je", "") or "",                  # newer first (reverse)
             e.get("_compactness", 10**9),                  # tighter match first
-            -(e.get("kreita_je") or ""),                   # newer first
-        ))
+        ), reverse=True)
+        # Re-sort stably by frequency (descending) to keep top matches
+        entries.sort(key=lambda e: e.get("_frequency", 0), reverse=True)
 
         return entries[:limit]
 
