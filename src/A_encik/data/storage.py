@@ -62,90 +62,28 @@ def _repair_if_corrupted() -> bool:
     if not _DB_FILE.exists():
         return False
 
-    # Always clean orphaned WAL/SHM on startup
+    # Quick, read-only check first. If the DB is healthy, don't touch
+    # WAL/SHM at all — only delete them if quick_check fails.
+    try:
+        _conn = sqlite3.connect(f"file:{_DB_FILE}?immutable=1", uri=True)
+        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+        _conn.close()
+        if _result == "ok":
+            return False
+    except Exception:
+        pass
+
+    # quick_check failed — delete WAL+SHM and retry
     for _suffix in ("-wal", "-shm"):
         _DB_FILE.with_name(_DB_FILE.name + _suffix).unlink(missing_ok=True)
 
-    # Verify main DB integrity
-    _conn = None
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        if _result != "ok":
-            _conn.close()
-            return False  # Main DB itself is corrupt — can't fix
+        _conn.close()
+        return _result == "ok"
     except Exception:
         return False
-    finally:
-        if _conn is not None:
-            _conn.close()
-
-    # Rebuild FTS5 table if its schema doesn't match the config.
-    # FTS5 virtual tables can become corrupt independently of the
-    # main database (the FTS index stores data in shadow tables
-    # that aren't covered by integrity_check).
-    _rebuilt = False
-    _fts_name = ENCIK_FTS_CONFIG.fts_table
-    _needs_rebuild = True
-
-    _conn = _try_conn = None
-    try:
-        _conn = sqlite3.connect(str(_DB_FILE))
-        _row = _conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
-            (_fts_name,)
-        ).fetchone()
-        if _row:
-            _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _row[0]}
-            _needs_rebuild = _actual != set(ENCIK_FTS_CONFIG.fts_columns)
-        if _needs_rebuild:
-            # Try external content rebuild first
-            _conn.execute(f"DROP TABLE IF EXISTS {_fts_name}")
-            _conn.execute(f"""CREATE VIRTUAL TABLE IF NOT EXISTS {_fts_name}
-                USING fts5(
-                    uuid UNINDEXED,
-                    terminologio_search,
-                    difinio,
-                    enhavo,
-                    content=encik,
-                    content_rowid=rowid,
-                    tokenize='unicode61'
-                )""")
-            _conn.execute(f"INSERT INTO {_fts_name}({_fts_name}) VALUES('rebuild')")
-            _rebuilt = True
-    except Exception:
-        # FTS5 rebuild via external content may hang if shadow tables
-        # are corrupt. Fall back to standalone + manual population.
-        if _conn is not None:
-            _conn.close()
-        _conn = None
-        try:
-            _conn = sqlite3.connect(str(_DB_FILE))
-            _conn.execute(f"DROP TABLE IF EXISTS {_fts_name}")
-            _conn.execute(f"""CREATE VIRTUAL TABLE {_fts_name} USING fts5(
-                uuid UNINDEXED,
-                terminologio_search,
-                difinio,
-                enhavo,
-                tokenize='unicode61'
-            )""")
-            _rows = _conn.execute(
-                "SELECT rowid, uuid, terminologio_search, difinio, enhavo FROM encik"
-            ).fetchall()
-            for _r in _rows:
-                _conn.execute(
-                    f"INSERT INTO {_fts_name}(rowid, uuid, terminologio_search, difinio, enhavo) "
-                    "VALUES (?, ?, ?, ?, ?)", _r
-                )
-            _conn.commit()
-            _rebuilt = True
-        except Exception:
-            pass
-    finally:
-        if _conn is not None:
-            _conn.close()
-
-    return _rebuilt
 
 
 def get_db() -> SQLiteDB:

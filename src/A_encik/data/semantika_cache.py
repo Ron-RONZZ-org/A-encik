@@ -9,7 +9,10 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from A.data.base import SQLiteDB
 
 from A import info, warning as _warn
 
@@ -45,10 +48,20 @@ def init_cache_table(db=None) -> None:
     db.execute(CREATE_SEMANTIKA_CACHE)
 
 
+_cache_db: SQLiteDB | None = None
+
 def _get_db():
-    """Get database connection (lazy import to avoid circular deps)."""
-    from A_encik.data.storage import get_db as _db
-    return _db()
+    """Get database connection (singleton, lazy import to avoid circular deps).
+
+    Returns a single shared ``SQLiteDB`` instance so that multiple callers
+    within the same process use the same cached connection. This prevents
+    WAL/SHM conflicts between concurrent connections.
+    """
+    global _cache_db
+    if _cache_db is None:
+        from A_encik.data.storage import get_db as _get_db_impl
+        _cache_db = _get_db_impl()
+    return _cache_db
 
 
 def _now_iso() -> str:
