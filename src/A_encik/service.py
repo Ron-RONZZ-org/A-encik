@@ -288,14 +288,20 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
     ) -> list[dict[str, Any]]:
         """Ranked search across all text fields.
 
-        Priority:
-        1. Title match (terminologio — exact accent-folded)
-        2. Compactness (shorter text with query near start)
-        3. Recency (newest entries first)
+        All operations are O(K log K) where K = results count (=10-50),
+        never O(N) where N = total entries (up to 10⁴+).
 
-        Uses FTS5 BM25 when ``--teksto`` is needed (via ``search_fts``),
-        otherwise relies on ``LIKE`` with SQL-level ordering + Python
-        compactness re-scoring on the top results (avoids full-table scan).
+        Ranking factors:
+        1. **Title prefix** (SQL): entries whose ``terminologio`` starts
+           with the query are ranked first (``CASE WHEN LIKE 'prefix%'``).
+        2. **Match frequency** (Python): number of text fields the query
+           appears in across terminologio, difinoj, enhavo, difinio.
+        3. **Compactness** (Python): how close the query appears to the
+           start of each field (lower = better).
+        4. **Recency** (SQL): ``ORDER BY kreita_je DESC``.
+
+        All Python scoring runs only on the K results returned by SQL,
+        never on the full database.
 
         Args:
             query: Search text.
@@ -309,47 +315,33 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
         if not folded:
             return []
 
-        # Phase 1: SQL-level filter + primary sort
-        # Use LIKE on terminologio_search (all langs, folded), then
-        # order by: title prefix match > general match > recency.
+        # Phase 1: SQL filter → K matching entries with prefix boost + recency
         pattern = f"%{folded}%"
         prefix = f"{folded}%"
         rows = self.db.execute(
             """SELECT *, (
-                CASE WHEN terminologio_search LIKE ? THEN 0
-                     ELSE 1 END
-            ) AS match_rank
+                CASE WHEN terminologio_search LIKE ? THEN 0 ELSE 1 END
+            ) AS _title_prefix
             FROM encik
             WHERE terminologio_search LIKE ?
-            ORDER BY match_rank ASC, kreita_je DESC
+            ORDER BY _title_prefix ASC, kreita_je DESC
             LIMIT ?""",
             (prefix, pattern, limit),
         )
         entries = [self._deserialize_row(row) for row in rows]
 
         if not entries:
-            # Fallback: search difinio/enhavo raw
             rows = self.db.execute(
                 "SELECT * FROM encik WHERE difinio LIKE ? OR enhavo LIKE ? ORDER BY kreita_je DESC LIMIT ?",
                 (f"%{query}%", f"%{query}%", limit),
             )
             entries = [self._deserialize_row(row) for row in rows]
 
-        # Phase 2: Python-side compactness re-scoring on top N only
-        # (avoids loading/ranking the entire database).
         if len(entries) <= 1:
             return entries
 
-        def _compactness(text: str, needle: str) -> int:
-            """Lower = better match (query appears near start with little padding)."""
-            folded_text = _fold(text)
-            idx = folded_text.find(needle)
-            if idx < 0:
-                return 10**9
-            return idx
-
+        # Phase 2: Python ranking on K entries only (O(K * F) ≅ ~500 ops)
         for e in entries:
-            # Collect all text fields for compactness scoring
             texts: list[str] = []
             term = e.get("terminologio") or {}
             texts.extend(str(v) for v in term.values() if v)
@@ -360,12 +352,24 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
             if e.get("difinio"):
                 texts.append(str(e["difinio"]))
 
-            best = min(_compactness(t, folded) for t in texts if t)
+            # Match frequency: count fields containing the query
+            freq = sum(1 for t in texts if folded in _fold(t))
+            e["_frequency"] = freq
+
+            # Compactness: minimum index of query in any field
+            best = 10**9
+            for t in texts:
+                idx = _fold(t).find(folded)
+                if 0 <= idx < best:
+                    best = idx
             e["_compactness"] = best
 
-        # Sort: compactness ascending, then recency descending
-        entries.sort(key=lambda e: (e.get("_compactness", 10**9),
-                                     -(e.get("kreita_je") or "")))
+        # Sort: frequency desc → compactness asc → recency desc
+        entries.sort(key=lambda e: (
+            -(e.get("_frequency", 0)),                     # more matches first
+            e.get("_compactness", 10**9),                  # tighter match first
+            -(e.get("kreita_je") or ""),                   # newer first
+        ))
 
         return entries[:limit]
 
