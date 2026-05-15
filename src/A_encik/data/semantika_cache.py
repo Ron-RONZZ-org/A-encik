@@ -48,20 +48,15 @@ def init_cache_table(db=None) -> None:
     db.execute(CREATE_SEMANTIKA_CACHE)
 
 
-_cache_db: SQLiteDB | None = None
-
 def _get_db():
-    """Get database connection (singleton, lazy import to avoid circular deps).
+    """Get the shared database connection from storage (singleton).
 
-    Returns a single shared ``SQLiteDB`` instance so that multiple callers
-    within the same process use the same cached connection. This prevents
-    WAL/SHM conflicts between concurrent connections.
+    Delegates to ``A_encik.data.storage.get_db()`` which now returns a
+    single shared ``SQLiteDB`` instance. This prevents WAL/SHM conflicts
+    between multiple connections to the same database file.
     """
-    global _cache_db
-    if _cache_db is None:
-        from A_encik.data.storage import get_db as _get_db_impl
-        _cache_db = _get_db_impl()
-    return _cache_db
+    from A_encik.data.storage import get_db as _get_db_impl
+    return _get_db_impl()
 
 
 def _now_iso() -> str:

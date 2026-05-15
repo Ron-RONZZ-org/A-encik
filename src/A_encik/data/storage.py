@@ -86,46 +86,60 @@ def _repair_if_corrupted() -> bool:
         return False
 
 
+_db_instance: SQLiteDB | None = None
+
 def get_db() -> SQLiteDB:
-    """Get database connection."""
+    """Get or create the shared database connection (singleton).
+
+    All callers within the same process share one ``SQLiteDB`` instance,
+    which uses one cached SQLite connection. This avoids WAL/SHM conflicts
+    that occur when multiple connections access the same database file.
+    """
+    global _db_instance
+    if _db_instance is not None and not _repair_if_corrupted():
+        return _db_instance
+
     ensure_dirs()
-    if _repair_if_corrupted():
-        # Database was repaired — the singleton EncikService may hold a
-        # stale connection. Reset so callers get a fresh service+connection.
-        import A_encik.service as _svc
-        _svc._encik_service = None
-    db = SQLiteDB(_DB_FILE)
+    _repair_if_corrupted()
+
+    _db_instance = SQLiteDB(_DB_FILE)
 
     # If the FTS table has wrong columns (schema changed), drop it first
     # using a fresh connection to avoid WAL state conflicts with the
     # cached connection that will be used for subsequent DDL.
     _fts_name = ENCIK_FTS_CONFIG.fts_table
-    if _DB_FILE.exists():
-        try:
-            _fts_row = db.execute_one(
-                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
-                (_fts_name,)
-            )
-            if _fts_row:
-                _fts_sql = _fts_row.get("sql", "")
-                _expected = set(ENCIK_FTS_CONFIG.fts_columns)
-                _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
-                if _actual != _expected:
-                    with db.raw_connection() as _raw:
-                        _raw.execute(f"DROP TABLE IF EXISTS {_fts_name}")
-                        _raw.commit()
-        except Exception:
-            pass  # Will be created fresh if table doesn't exist
+    try:
+        _fts_row = _db_instance.execute_one(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (_fts_name,)
+        )
+        if _fts_row:
+            _fts_sql = _fts_row.get("sql", "")
+            _expected = set(ENCIK_FTS_CONFIG.fts_columns)
+            _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
+            if _actual != _expected:
+                _db_instance.close()
+                with SQLiteDB(_DB_FILE).raw_connection() as _raw:
+                    _raw.execute(f"DROP TABLE IF EXISTS {_fts_name}")
+                    _raw.commit()
+                _db_instance = SQLiteDB(_DB_FILE)
+    except Exception:
+        _db_instance = SQLiteDB(_DB_FILE)
 
-    db.execute(_CREATE_ENCIK)
+    _db_instance.execute(_CREATE_ENCIK)
     for stmt in _CREATE_ENCIK_INDEXES.strip().split(";"):
         if stmt.strip():
-            db.execute(stmt)
-    migrate_db(db)
+            _db_instance.execute(stmt)
+    migrate_db(_db_instance)
     # Init semantika cache table (lazy import avoids circular dep)
     from A_encik.data.semantika_cache import init_cache_table as _init_cache
-    _init_cache(db)
-    return db
+    _init_cache(_db_instance)
+
+    # Reset service singleton so it picks up the fresh DB
+    import A_encik.service as _svc
+    _svc._encik_service = None
+
+    return _db_instance
 
 
 # FTS5 configuration for encik full-text search
