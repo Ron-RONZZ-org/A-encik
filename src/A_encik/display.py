@@ -82,13 +82,23 @@ def render_entry_html(
     # --- Ligilo: show as {tipo} {target entry} ---
     lig_raw = entry.get("ligilo") or []
     if isinstance(lig_raw, list):
+        from A import tr_multi
         from A_encik.display_helpers import display_ligilo_items
         _lig_items = display_ligilo_items(entry)
         if _lig_items:
-            lig_rows = [
-                f"<li><code>{_escape_html(it['tipo'] or '')}</code> {_escape_html(it.get('titolo', '') or '')}  <span class=\"uuid\">#{_escape_html(it['uuid'][:8])}</span></li>"
-                for it in _lig_items
-            ]
+            lig_rows = []
+            for it in _lig_items:
+                _tipo_raw = it.get("tipo") or ""
+                # Strip ec# prefix and localize ec#related
+                if _tipo_raw == "ec#related":
+                    _tipo_display = tr_multi("relaciita", "related", "lié")
+                else:
+                    _tipo_display = _tipo_raw[3:] if _tipo_raw.startswith("ec#") else _tipo_raw
+                _linked_title = _escape_html(it.get("titolo", "") or "")
+                _short_uuid = _escape_html(it["uuid"][:8])
+                lig_rows.append(
+                    f'<li><code>{_escape_html(_tipo_display)}</code> {_linked_title}  <span class="uuid">#{_short_uuid}</span></li>'
+                )
             rows.append(f'<div class="field"><label>ligilo</label><div class="field-content"><ul>{"".join(lig_rows)}</ul></div></div>')
 
     # Render content fields (skip header fields and suppressions)
@@ -103,8 +113,8 @@ def render_entry_html(
                 continue
         if include_fields and key not in include_fields:
             continue
-        # Skip ligilo/semantika — already rendered above
-        if key in ("ligilo", "semantika", "ligiloj", "titolo_fold"):
+        # Skip ligilo/semantika/superklaso — already rendered in ligilo section
+        if key in ("ligilo", "semantika", "ligiloj", "superklaso", "subklaso", "titolo_fold"):
             continue
 
         # Skip empty string values (e.g. empty enhavo)
