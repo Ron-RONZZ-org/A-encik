@@ -76,10 +76,15 @@ def escape_latex_style_backslashes(raw: str) -> str:
             # Inside multiline string: escape backslashes not already escaped
             if ch == "\\" and i + 1 < len(raw):
                 next_ch = raw[i + 1]
-                # Don't escape valid TOML escapes: \\n, \\t, \\", \\', \\\\
                 valid_escapes = {"n", "t", '"', "'", "\\"}
-                if next_ch not in valid_escapes and not next_ch.isspace():
-                    # LaTeX-style: \\alpha -> \\\\alpha
+                # Already a valid TOML escape
+                if next_ch in valid_escapes:
+                    result.append(ch)
+                    result.append(next_ch)
+                    i += 2
+                    continue
+                # Single backslash before non-escape char — LaTeX style
+                if not next_ch.isspace():
                     result.append("\\\\")
                     i += 1
                     continue
@@ -93,7 +98,15 @@ def escape_latex_style_backslashes(raw: str) -> str:
             if ch == "\\" and i + 1 < len(raw):
                 next_ch = raw[i + 1]
                 valid_escapes = {"n", "t", '"', "'", "\\"}
-                if next_ch not in valid_escapes and not next_ch.isspace():
+                # Already a valid TOML escape: \\n, \\t, \\", \\', \\\\
+                if next_ch in valid_escapes:
+                    result.append(ch)
+                    result.append(next_ch)
+                    i += 2
+                    continue
+                # Single backslash followed by non-escape char (e.g.
+                # LaTeX \alpha, \uparrow) — escape it by adding \\.
+                if not next_ch.isspace():
                     result.append("\\\\")
                     i += 1
                     continue
