@@ -38,6 +38,7 @@ _REGISTERED_GROUP_COMMANDS: set[str] = set()
 def _print_semantika_kategorio(kategorio: str) -> None:
     """Print semantic links in a category as a Rich table."""
     from rich.table import Table
+    from rich.box import SIMPLE as BOX_SIMPLE
 
     groups = load_semantika_groups()
     rows = groups.get(kategorio)
@@ -153,6 +154,7 @@ def semantika_ligilo_serci(
 
     if local_matches:
         from rich.table import Table
+        from rich.box import SIMPLE as BOX_SIMPLE
         table = Table(
             title=tr_multi(
                 "Lokaj rezultoj",
@@ -180,6 +182,7 @@ def semantika_ligilo_serci(
 
     if wikidata_matches:
         from rich.table import Table
+        from rich.box import SIMPLE as BOX_SIMPLE
         table = Table(
             title=tr_multi(
                 "Wikidata rezultoj",
@@ -299,6 +302,7 @@ def semantika_ligilo_aldoni(
 def semantika_ls() -> None:
     """List all semantika groups with row counts and file paths."""
     from rich.table import Table
+    from rich.box import SIMPLE as BOX_SIMPLE
     from A_encik.semantika.config import semantika_group_file
 
     groups = load_semantika_groups()
