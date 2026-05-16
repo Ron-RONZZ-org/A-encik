@@ -283,4 +283,4 @@ def row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-__all__ = ["ensure_dirs", "get_db", "migrate_db", "row_to_dict", "ENCIK_FTS_CONFIG"]
+__all__ = ["ensure_dirs", "get_db", "migrate_db", "repair_db", "row_to_dict", "ENCIK_FTS_CONFIG"]
