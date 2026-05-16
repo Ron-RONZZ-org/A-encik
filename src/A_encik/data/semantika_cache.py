@@ -7,6 +7,7 @@ Always queries in English for consistency (Wikidata lacks non-English descriptio
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
@@ -35,6 +36,20 @@ CREATE TABLE IF NOT EXISTS semantika_cache (
 # Default TTL for cache entries (seconds)
 CACHE_TTL_DAYS = 7
 CACHE_TTL_SECONDS = CACHE_TTL_DAYS * 86400
+
+
+def _try_repair_db() -> None:
+    """Attempt DB repair when cache operations fail due to corruption.
+
+    Delegates to ``storage.repair_db()`` which closes the singleton,
+    purges stale WAL/SHM files, and runs integrity check.
+    Safe to call speculatively — no-op on healthy DB.
+    """
+    try:
+        from A_encik.data.storage import repair_db
+        repair_db()
+    except Exception:
+        pass
 
 
 def init_cache_table(db=None) -> None:
@@ -116,24 +131,51 @@ def _check_db_cache(keyword: str) -> list[dict] | None:
         keyword: Normalized English keyword
 
     Returns:
-        List of cached results or None
+        List of cached results or None (None = cache miss or DB error)
     """
-    db = _get_db()
-    rows = db.execute(
-        """SELECT property_id, label_en, label_eo, description, source, fetched_at
-           FROM semantika_cache
-           WHERE keyword LIKE ? OR label_en LIKE ? OR description LIKE ?
-           ORDER BY hit_count DESC, fetched_at DESC
-           LIMIT 15""",
-        (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"),
-    )
-    if rows:
-        # Update hit counts
-        for row in rows:
-            db.execute(
-                "UPDATE semantika_cache SET hit_count = hit_count + 1 WHERE property_id = ?",
-                (row["property_id"],),
-            )
+    try:
+        db = _get_db()
+        rows = db.execute(
+            """SELECT property_id, label_en, label_eo, description, source, fetched_at
+               FROM semantika_cache
+               WHERE keyword LIKE ? OR label_en LIKE ? OR description LIKE ?
+               ORDER BY hit_count DESC, fetched_at DESC
+               LIMIT 15""",
+            (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"),
+        )
+        if rows:
+            for row in rows:
+                db.execute(
+                    "UPDATE semantika_cache SET hit_count = hit_count + 1 WHERE property_id = ?",
+                    (row["property_id"],),
+                )
+            return [
+                {
+                    "id": r["property_id"],
+                    "label": r["label_en"],
+                    "label_eo": r.get("label_eo", ""),
+                    "description": r.get("description", ""),
+                }
+                for r in rows
+            ]
+        return None
+    except sqlite3.DatabaseError as e:
+        msg = str(e).lower()
+        if "disk is full" in msg:
+            raise  # Disk full — re-raise, repair won't help
+        _warn(f"SQLite cache unavailable: {e}")
+        _try_repair_db()
+        return None
+    except sqlite3.Error as e:
+        _warn(f"SQLite cache error: {e}")
+        return None
+        if rows:
+            # Update hit counts
+            for row in rows:
+                db.execute(
+                    "UPDATE semantika_cache SET hit_count = hit_count + 1 WHERE property_id = ?",
+                    (row["property_id"],),
+                )
         return [
             {
                 "id": r["property_id"],
@@ -270,30 +312,37 @@ def _query_wikidata_api(keyword: str, retries: int = 2) -> list[dict] | None:
 def _store_negative_cache(keyword: str, ttl_seconds: int = 3600) -> None:
     """Store a tombstone entry so repeated lookups for the same keyword
     skip the API until the TTL expires."""
-    db = _get_db()
-    expiry = (datetime.now(timezone.utc).timestamp() + ttl_seconds)
-    db.execute(
-        """INSERT OR REPLACE INTO semantika_cache
-           (keyword, property_id, label_en, description, source, fetched_at)
-           VALUES (?, '_NEGATIVE_', '', '', 'negative_cache', ?)""",
-        (keyword, expiry),
-    )
+    try:
+        db = _get_db()
+        expiry = (datetime.now(timezone.utc).timestamp() + ttl_seconds)
+        db.execute(
+            """INSERT OR REPLACE INTO semantika_cache
+               (keyword, property_id, label_en, description, source, fetched_at)
+               VALUES (?, '_NEGATIVE_', '', '', 'negative_cache', ?)""",
+            (keyword, expiry),
+        )
+    except sqlite3.Error:
+        pass  # Cache write failures are non-fatal
+
 
 
 def _check_negative_cache(keyword: str) -> bool:
     """Check if a keyword has a negative cache entry that hasn't expired."""
-    db = _get_db()
-    row = db.execute_one(
-        "SELECT fetched_at FROM semantika_cache WHERE keyword = ? AND property_id = '_NEGATIVE_'",
-        (keyword,),
-    )
-    if row:
-        try:
-            expiry = float(row["fetched_at"])
-            return time.time() < expiry
-        except (ValueError, TypeError):
-            pass
-    return False
+    try:
+        db = _get_db()
+        row = db.execute_one(
+            "SELECT fetched_at FROM semantika_cache WHERE keyword = ? AND property_id = '_NEGATIVE_'",
+            (keyword,),
+        )
+        if row:
+            try:
+                expiry = float(row["fetched_at"])
+                return time.time() < expiry
+            except (ValueError, TypeError):
+                pass
+        return False
+    except sqlite3.Error:
+        return False
 
 
 # ── Cache storage ────────────────────────────────────────────────────────────
@@ -306,21 +355,23 @@ def _batch_store(results: list[dict], source: str = "api") -> None:
         results: List of property dicts with id, label, description
         source: Origin ("api" or "csv")
     """
-    db = _get_db()
-    now = _now_iso()
-    for r in results:
-        prop_id = r.get("id", "")
-        label = r.get("label", "")
-        description = r.get("description", "")
-        # Generate keywords from label and description for better cache hits
-        keywords = _generate_keywords(label, description)
-        for kw in keywords:
-            db.execute(
-                """INSERT OR IGNORE INTO semantika_cache
-                   (keyword, property_id, label_en, description, source, fetched_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (kw, prop_id, label, description, source, now),
-            )
+    try:
+        db = _get_db()
+        now = _now_iso()
+        for r in results:
+            prop_id = r.get("id", "")
+            label = r.get("label", "")
+            description = r.get("description", "")
+            keywords = _generate_keywords(label, description)
+            for kw in keywords:
+                db.execute(
+                    """INSERT OR IGNORE INTO semantika_cache
+                       (keyword, property_id, label_en, description, source, fetched_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (kw, prop_id, label, description, source, now),
+                )
+    except sqlite3.Error:
+        pass  # Cache write failures are non-fatal
 
 
 def _generate_keywords(label: str, description: str) -> list[str]:

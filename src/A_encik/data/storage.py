@@ -86,6 +86,26 @@ def _repair_if_corrupted() -> bool:
         return False
 
 
+def repair_db() -> bool:
+    """Attempt to repair a corrupted database.
+
+    Closes the singleton connection, purges stale WAL/SHM files,
+    and runs integrity check. The next ``get_db()`` call will
+    create a fresh connection.
+
+    Returns:
+        True if repair succeeded, False if DB is irrecoverable.
+    """
+    global _db_instance
+    if _db_instance is not None:
+        try:
+            _db_instance.close()
+        except Exception:
+            pass
+        _db_instance = None
+    return _repair_if_corrupted()
+
+
 _db_instance: SQLiteDB | None = None
 
 def get_db() -> SQLiteDB:
