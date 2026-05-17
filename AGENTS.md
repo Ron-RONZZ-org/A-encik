@@ -22,7 +22,7 @@ Before adding new CLI commands or changing existing ones:
 | `modifi` | `modifi` | ✓ exact match required |
 | `vidi` | `vidi` | ✓ exact match required |
 | `eksporti` | `eksporti` | ✓ exact match required |
-| `generi` | `generi` | ✓ exact match required |
+| `generi` | `generi` | ✓ delegates to A-agento (runtime detection) |
 | `semantika-serci` | `semantika-serci` | ✓ exact match required |
 | `serci` | `serci` | ✓ exact match required |
 | `ls` | `ls` | ✓ exact match required |
@@ -187,7 +187,8 @@ All A-ecosystem development **must** use `uv` as the package manager:
 - Don't use `print()` — use `A` output functions
 - Don't hardcode paths — use `A.core.paths`
 - Don't implement utilities that should be in core
-- **generi/semantika**: requires A-AI rewrite — implement as TODO stubs
+- **generi** (previous TODO stub): now implemented — delegates to A-agento via runtime detection. If A-agento is not installed, prompts user to install it.
+- **semantika**: already fully implemented (semantika-serci, semantika group commands)
 
 ## Database Schema Migrations
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch, MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -289,14 +290,55 @@ class TestAgordiCommand:
 
 
 class TestGeneriCommand:
-    """Tests for generi command."""
-    
-    def test_generi_is_todo(self, runner):
-        """Test generi shows TODO."""
+    """Tests for generi command (delegates to A-agento)."""
+
+    def test_generi_requires_prompto(self, runner):
+        """Test generi without prompto shows error."""
         result = runner.invoke(app, ["generi"])
-        
-        assert result.exit_code == 0
-        assert "TODO" in result.output
+        assert result.exit_code != 0
+
+    def test_generi_no_agento(self, runner):
+        """Test generi shows install hint when A-agento is missing."""
+        import builtins as _builtins
+        _real_import = _builtins.__import__
+
+        def _mock_import(name, *args, **kwargs):
+            if name.startswith("A_agento"):
+                raise ImportError(f"No module named {name}")
+            return _real_import(name, *args, **kwargs)
+
+        with patch.object(_builtins, "__import__", side_effect=_mock_import):
+            result = runner.invoke(app, ["generi", "Grokipedia"])
+            assert result.exit_code != 0
+            assert "A-agento" in result.output
+
+    def test_generi_delegates_to_agento(self, runner):
+        """Test generi delegates to A-agento when installed."""
+        mock_gen = MagicMock(return_value=None)
+
+        # Build mock module hierarchy for A_agento.commands.knowledge
+        mock_knowledge = MagicMock(spec=object())
+        mock_knowledge.generi = mock_gen
+
+        mock_commands = MagicMock(spec=object())
+        mock_commands.knowledge = mock_knowledge
+
+        mock_agento = MagicMock(spec=object())
+        mock_agento.commands = mock_commands
+
+        # Simulate A-agento being installed via sys.modules
+        with patch.dict("sys.modules", {
+            "A_agento": mock_agento,
+            "A_agento.commands": mock_commands,
+            "A_agento.commands.knowledge": mock_knowledge,
+        }):
+            result = runner.invoke(app, ["generi", "Grokipedia"])
+
+            assert mock_gen.called, "A-agento generi was not called"
+            _, call_kwargs = mock_gen.call_args
+            assert call_kwargs.get("formato") == "enc"
+            assert call_kwargs.get("prompto") == "Grokipedia"
+            assert result.exit_code == 0
 
 
 class TestSemantikaCommand:

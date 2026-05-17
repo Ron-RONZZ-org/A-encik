@@ -196,6 +196,84 @@ def register_commands(app: typer.Typer) -> None:
         console.print(f"  Language: {config.language}")
 
     @app.command("generi")
-    def generi() -> None:
-        """Generate entry with AI (TODO)."""
-        info("[dim]TODO: implement generi - requires A-AI rewrite[/dim]")
+    def generi(
+        prompto: str = typer.Argument(
+            ...,
+            help=tr_multi(
+                "Temo aŭ priskribo por la enhavo",
+                "Topic or description for the content",
+                "Sujet ou description du contenu",
+            ),
+        ),
+        provizanto: Optional[str] = typer.Option(
+            None,
+            "--provizanto",
+            "-p",
+            help=tr_multi(
+                "Provizanto (vidu 'agento agordi ls')",
+                "Provider (see 'agento agordi ls')",
+                "Fournisseur (voir 'agento agordi ls')",
+            ),
+        ),
+        konservi: Optional[Path] = typer.Option(
+            None,
+            "--konservi",
+            "-K",
+            help=tr_multi(
+                "Dosiero por konservi la rezulton (ekz: eligo.enc)",
+                "File path to save the result (e.g. output.enc)",
+                "Chemin du fichier pour sauvegarder le r\u00e9sultat (ex: sortie.enc)",
+            ),
+        ),
+        verbose: bool = typer.Option(
+            False,
+            "--verbose",
+            "-v",
+            help=tr_multi(
+                "Montri la plenan konversacion kun LLM",
+                "Show full LLM conversation",
+                "Afficher la conversation compl\u00e8te avec LLM",
+            ),
+        ),
+    ) -> None:
+        """Generate a .enc knowledge entry using AI (via A-agento).
+
+        Uses the configured LLM provider to generate an .enc formatted
+        knowledge entry. Requires A-agento to be installed.
+
+        Examples:
+            encik generi "macOS"
+            encik generi "Python" --konservi eligo.enc
+            encik generi "Grokipedia" --verbose
+        """
+        try:
+            from A_agento.commands.knowledge import generi as _agento_generi
+        except ImportError:
+            error(tr_multi(
+                "Bezonas A-agento por AI-generado.",
+                "A-agento is required for AI generation.",
+                "A-agento est requis pour la g\u00e9n\u00e9ration IA.",
+            ))
+            from A.utils.deps import ensure_dependency
+            try:
+                ensure_dependency("A_agento", "A-agento")
+            except ImportError:
+                error(tr_multi(
+                    "Ne povis instali A-agento. Instalu permane: uv pip install A-agento",
+                    "Could not install A-agento. Install manually: uv pip install A-agento",
+                    "Impossible d'installer A-agento. Installez manuellement : uv pip install A-agento",
+                ))
+                raise typer.Exit(1) from None
+            # Retry after installation
+            from A_agento.commands.knowledge import generi as _agento_generi  # noqa: F811
+
+        _agento_generi(
+            prompto=prompto,
+            formato="enc",
+            titolo=None,
+            provizanto=provizanto,
+            konservi=konservi,
+            kopii=False,
+            verbose=verbose,
+            interjekti=False,
+        )
