@@ -100,7 +100,7 @@ def _resolve_inline_links(md_text: str, link_depth: int = 0) -> str:
     """
     from A_encik.service import get_service as _get_svc
     from A_encik.display_helpers import entry_locale_title as _elt
-    from A_encik._display_entry import render_entry_html, preview_entry as _pe
+    from A_encik._display_entry import render_entry_html
 
     def _replace(m: re.Match) -> str:
         label = m.group(1).strip()
@@ -117,7 +117,7 @@ def _resolve_inline_links(md_text: str, link_depth: int = 0) -> str:
         if link_depth > 0:
             target_html = render_entry_html(target, include_fields=None, _link_depth=link_depth)
             _target_title = _elt(target) or "encik"
-            target_path = _pe(target_html, open_browser=False, title=_target_title)
+            target_path = preview_html(target_html, open_browser=False, title=_target_title)
             return f"[{label}](file://{target_path})"
         return f"[{label}](#{short})"
 
