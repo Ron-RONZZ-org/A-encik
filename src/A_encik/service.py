@@ -19,7 +19,7 @@ from A_encik._search_service import SearchMixin
 _encik_service: EncikService | None = None
 
 
-class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin, SearchMixin):
+class EncikService(SearchMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
     """Encik service: CRUD + time entries + graph + links."""
 
     def __init__(self, db):
