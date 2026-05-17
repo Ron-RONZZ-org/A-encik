@@ -139,6 +139,8 @@ def repair_db() -> bool:
 
 
 _db_instance: SQLiteDB | None = None
+_repair_checked: bool = False  # Only check corruption once per process
+
 
 def get_db() -> SQLiteDB:
     """Get or create the shared database connection (singleton).
@@ -147,14 +149,25 @@ def get_db() -> SQLiteDB:
     which uses one cached SQLite connection. This avoids WAL/SHM conflicts
     that occur when multiple connections access the same database file.
     """
-    global _db_instance
-    if _db_instance is not None and not _repair_if_corrupted():
+    global _db_instance, _repair_checked
+
+    # Fast path: existing healthy instance (repair checked on first access)
+    if _db_instance is not None and _repair_checked:
         return _db_instance
 
-    ensure_dirs()
-    _repair_if_corrupted()
+    if not _repair_checked:
+        ensure_dirs()
+        _repair_if_corrupted()
+        _repair_checked = True
 
-    _db_instance = SQLiteDB(_DB_FILE)
+        # If repair deleted WAL/SHM while we had a cached connection,
+        # close it so the new one starts fresh
+        if _db_instance is not None:
+            _db_instance.close()
+            _db_instance = None
+
+    if _db_instance is None:
+        _db_instance = SQLiteDB(_DB_FILE)
 
     # If the FTS table has wrong columns (schema changed), drop it first
     # using a fresh connection to avoid WAL state conflicts with the
