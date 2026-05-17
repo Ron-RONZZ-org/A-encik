@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
-import shutil
 import sqlite3
 from pathlib import Path
 from typing import Any
 
 from A.core.paths import data_dir as _data_dir, ensure_dirs as _ensure_dirs
-from A.data.base import SQLiteDB
+from A.data.base import (
+    SQLiteDB,
+    backup_db,
+    health_check as _health_check,
+    repair_db as _core_repair,
+    readonly_recover as _core_readonly_recover,
+)
 from A.data.search import FTSConfig
 from A.utils.normalize import fold_search_text
 
@@ -53,83 +58,46 @@ def ensure_dirs() -> None:
 def _repair_if_corrupted() -> bool:
     """Check and repair database if corrupted.
 
-    Purges stale WAL+SHM files, then attempts VACUUM rebuild.
-    If the semantika_cache table is corrupted, drops and recreates it
-    (data loss is acceptable — it repopulates from CSV/Wikidata).
+    Delegates to ``A.data.base.repair_db()`` for WAL+SHM cleanup and
+    VACUUM. If that fails, additionally drops and recreates the
+    ``semantika_cache`` table (expendable cache — repopulates from
+    CSV/Wikidata).
 
     Returns:
         True if repair was attempted, False if nothing was needed.
     """
-    if not _DB_FILE.exists():
+    if _health_check(_DB_FILE):
         return False
 
-    # Quick, read-only check first. If the DB is healthy, don't touch
-    # WAL/SHM at all — only delete them if quick_check fails.
-    try:
-        _conn = sqlite3.connect(f"file:{_DB_FILE}?immutable=1", uri=True)
-        (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        _conn.close()
-        if _result == "ok":
-            return False
-    except Exception:
-        pass
+    # Core repair: delete WAL/SHM, VACUUM
+    if _core_repair(_DB_FILE):
+        return True
 
-    # quick_check failed — delete WAL+SHM and retry
-    for _suffix in ("-wal", "-shm"):
-        _DB_FILE.with_name(_DB_FILE.name + _suffix).unlink(missing_ok=True)
-
+    # Still broken — drop and recreate semantika_cache
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
+        _conn.execute("DROP TABLE IF EXISTS semantika_cache")
+        _conn.execute(
+            """CREATE TABLE IF NOT EXISTS semantika_cache (
+                keyword     TEXT NOT NULL,
+                property_id TEXT NOT NULL,
+                label_en    TEXT NOT NULL DEFAULT '',
+                label_eo    TEXT DEFAULT '',
+                description TEXT DEFAULT '',
+                source      TEXT DEFAULT 'api',
+                fetched_at  TEXT NOT NULL,
+                hit_count   INTEGER DEFAULT 1,
+                PRIMARY KEY (keyword, property_id)
+            )"""
+        )
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-        if _result == "ok":
-            _conn.close()
-            return True
-        # Still corrupted — try VACUUM rebuild
-        try:
-            _conn.execute("VACUUM")
-            (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-            if _result == "ok":
-                _conn.close()
-                return True
-        except Exception:
-            pass
-        # VACUUM didn't fix it — drop and recreate semantika_cache
-        try:
-            _conn.execute("DROP TABLE IF EXISTS semantika_cache")
-            _conn.execute(
-                """CREATE TABLE IF NOT EXISTS semantika_cache (
-                    keyword     TEXT NOT NULL,
-                    property_id TEXT NOT NULL,
-                    label_en    TEXT NOT NULL DEFAULT '',
-                    label_eo    TEXT DEFAULT '',
-                    description TEXT DEFAULT '',
-                    source      TEXT DEFAULT 'api',
-                    fetched_at  TEXT NOT NULL,
-                    hit_count   INTEGER DEFAULT 1,
-                    PRIMARY KEY (keyword, property_id)
-                )"""
-            )
-            (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
-            _conn.close()
-            return _result == "ok"
-        except Exception:
-            pass
         _conn.close()
-        return False
+        return _result == "ok"
     except Exception:
         return False
 
 
 def repair_db() -> bool:
-    """Attempt to repair a corrupted database.
-
-    Closes the singleton connection, purges stale WAL/SHM files,
-    and runs integrity check. The next ``get_db()`` call will
-    create a fresh connection.
-
-    Returns:
-        True if repair succeeded, False if DB is irrecoverable.
-    """
     global _db_instance
     if _db_instance is not None:
         try:
@@ -141,113 +109,38 @@ def repair_db() -> bool:
 
 
 def _backup_db() -> None:
-    """Snapshot the DB file before schema-altering operations.
-
-    Creates ``encik.db.bak`` (overwrites any previous backup).
-    No-op if the DB file doesn't exist yet.
-    """
-    if _DB_FILE.exists():
-        _bak = _DB_FILE.with_suffix(".db.bak")
-        try:
-            shutil.copy2(str(_DB_FILE), str(_bak))
-        except Exception:
-            pass  # Backup is best-effort
+    backup_db(_DB_FILE)
 
 
 def _readonly_recover() -> SQLiteDB | None:
-    """Attempt read-only recovery when DB is corrupted.
-
-    Opens the database in ``mode=ro`` which bypasses write-path corruption.
-    If the main ``encik`` table is readable, exports all entries into a
-    freshly created ``encik_recovered.db`` and returns a connection to it.
-
-    Returns:
-        New ``SQLiteDB`` instance on success, ``None`` if recovery fails.
-    """
+    import tempfile
+    tmp = Path(tempfile.mktemp(suffix=".db"))
     try:
-        _ro = sqlite3.connect(f"file:{_DB_FILE}?mode=ro", uri=True, timeout=10)
-        _tables = _ro.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-        _table_names = {t[0] for t in _tables}
-        if "encik" not in _table_names:
-            _ro.close()
-            return None
-
-        _count = _ro.execute("SELECT COUNT(*) FROM encik").fetchone()[0]
-        if _count == 0:
-            _ro.close()
-            return None
-
-        # Build recovery target
-        from A import info as _info, tr_multi as _tr
-        _info(_tr(
-            "Provas reakiri {n} enskribojn...",
-            "Attempting to recover {n} entries...",
-            "Tentative de récupération de {n} entrées...",
-        ).format(n=_count))
-
-        _rec = _DB_FILE.with_name("encik_recovered.db")
-        if _rec.exists():
-            _rec.unlink()
-
-        _new = sqlite3.connect(str(_rec), timeout=30)
-        _new.execute("PRAGMA journal_mode=WAL")
-
-        # Recreate schema from corrupted DB's sqlite_master
-        _schema_rows = _ro.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%' "
-            "ORDER BY rootpage"
-        ).fetchall()
-        for (_sql,) in _schema_rows:
-            if _sql:
-                _new.execute(_sql)
-
-        # Copy rows from each table (encik + supporting)
-        for _tn in sorted(_table_names):
-            if _tn.startswith("sqlite_") or "_fts" in _tn:
-                continue
-            try:
-                _rows = _ro.execute(f'SELECT * FROM "{_tn}"').fetchall()
-                _col_info = _ro.execute(f'PRAGMA table_info("{_tn}")').fetchall()
-                _cols = [c[1] for c in _col_info]
-                _csv = ", ".join(f'"{c}"' for c in _cols)
-                _ph = ", ".join(["?"] * len(_cols))
-                for _row in _rows:
-                    try:
-                        _new.execute(
-                            f'INSERT INTO "{_tn}" ({_csv}) VALUES ({_ph})',
-                            _row,
-                        )
-                    except Exception:
-                        pass  # Skip problematic rows
-            except Exception:
-                pass  # Skip corrupted tables
-
-        _new.commit()
-
-        # Verify and return
-        _final = _new.execute("SELECT COUNT(*) FROM encik").fetchone()[0]
-        _new.close()
-        _ro.close()
-
-        if _final > 0:
-            # Swap files
-            _bak = _DB_FILE.with_suffix(".db.dead")
-            shutil.move(str(_DB_FILE), str(_bak))
-            shutil.move(str(_rec), str(_DB_FILE))
-            for _sfx in ("-wal", "-shm"):
-                (_DB_FILE.parent / (_DB_FILE.name + _sfx)).unlink(missing_ok=True)
-            _info(_tr(
-                "Reakiris {n} enskribojn (malnova DB: {bak})",
-                "Recovered {n} entries (old DB: {bak})",
-                "Récupéré {n} entrées (ancienne DB: {bak})",
-            ).format(n=_final, bak=_bak.name))
-            return SQLiteDB(_DB_FILE)
+        count = _core_readonly_recover(_DB_FILE, tmp)
     except Exception:
-        pass
-    return None
+        tmp.unlink(missing_ok=True)
+        return None
+    if count == 0:
+        tmp.unlink(missing_ok=True)
+        return None
+    from A import info as _info, tr_multi as _tr
+    _info(_tr(
+        "Reakiris {n} enskribojn...",
+        "Recovered {n} entries...",
+        "Récupéré {n} entrées...",
+    ).format(n=count))
+    _bak = _DB_FILE.with_suffix(".db.dead")
+    import shutil as _su
+    _su.move(str(_DB_FILE), str(_bak))
+    _su.move(str(tmp), str(_DB_FILE))
+    for _sfx in ("-wal", "-shm"):
+        (_DB_FILE.parent / (_DB_FILE.name + _sfx)).unlink(missing_ok=True)
+    _info(_tr(
+        "Reakiris {n} enskribojn (malnova DB: {bak})",
+        "Recovered {n} entries (old DB: {bak})",
+        "Récupéré {n} entrées (ancienne DB: {bak})",
+    ).format(n=count, bak=_bak.name))
+    return SQLiteDB(_DB_FILE)
 
 
 _db_instance: SQLiteDB | None = None
