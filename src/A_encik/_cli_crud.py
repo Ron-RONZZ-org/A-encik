@@ -176,14 +176,11 @@ def register_commands(app: typer.Typer) -> None:
         dosiero: Optional[Path] = typer.Argument(
             None,
             help=tr_multi(
-                "Nova .enc dosiero por rekta anstataŭigo (pozicia argumento)",
-                "New .enc file for direct replacement (positional argument)",
-                "Nouveau fichier .enc pour remplacement direct (argument positionnel)",
+                ".enc dosiero por rekta anstataŭigo",
+                ".enc file for full replacement",
+                "Fichier .enc pour remplacement complet",
             ),
         ),
-        titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr_multi("Nova titolo", "New title", "Nouveau titre")),
-        difinio: Optional[str] = typer.Option(None, "-d", "--difino", help=tr_multi("Nova difino", "New definition", "Nouvelle définition")),
-        enhavo: Optional[str] = typer.Option(None, "-e", "--enhavo", help=tr_multi("Nova enhavo", "New content", "Nouveau contenu")),
         kopii: bool = typer.Option(
             False,
             "-k",
@@ -247,72 +244,49 @@ def register_commands(app: typer.Typer) -> None:
             error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
             raise typer.Exit(1)
 
-        # If dosiero positional arg provided, parse .enc and do full replacement
-        if dosiero is not None:
-            enc_path = dosiero.expanduser().resolve()
-            if not enc_path.exists():
-                error(tr_multi(
-                    f"Dosiero ne trovita: {enc_path}",
-                    f"File not found: {enc_path}",
-                    f"Fichier non trouvé: {enc_path}",
-                ))
-                raise typer.Exit(1)
-            if not enc_path.is_file():
-                error(tr_multi(
-                    f"Ne estas dosiero: {enc_path}",
-                    f"Not a file: {enc_path}",
-                    f"Ce n'est pas un fichier: {enc_path}",
-                ))
-                raise typer.Exit(1)
-
-            from A_encik.enc_format import parse_enc_file, validate_enc_entry
-            try:
-                parsed = parse_enc_file(enc_path)
-            except ValueError as exc:
-                error(str(exc))
-                raise typer.Exit(1)
-            errors = validate_enc_entry(parsed)
-            if errors:
-                for e in errors:
-                    error(f"Validiga eraro: {e}")
-                raise typer.Exit(1)
-            data = parsed
-        else:
-            data = {}
-            if titolo:
-                data["titolo"] = titolo
-                # Also update terminologio (terminologio is canonical for display)
-                term = dict(entry.get("terminologio") or {})
-                term["eo"] = titolo
-                data["terminologio"] = term
-            if difinio is not None:
-                data["difinio"] = difinio
-                # Also update difinoj (difinoj is canonical for display)
-                defs = dict(entry.get("difinoj") or {})
-                defs["eo"] = difinio
-                data["difinoj"] = defs
-            if enhavo is not None:
-                data["enhavo"] = enhavo
-
-        if not data:
-            info(tr_multi("Neniuj ŝanĝoj", "No changes", "Aucun changement"))
-            return
-
-        updated = service.update(entry["uuid"], data)
-        if dosiero is not None:
-            mod_name = entry_display_name(entry)
-            info(tr_multi(
-                f"Anstataŭigis {mod_name}",
-                f"Replaced {mod_name}",
-                f"Remplacé {mod_name}",
+        if dosiero is None:
+            error(tr_multi(
+                "Mankas .enc dosiero. Uzu: encik modifi <uuid> <dosiero.enc>",
+                "Missing .enc file. Usage: encik modifi <uuid> <file.enc>",
+                "Fichier .enc manquant. Usage: encik modifi <uuid> <fichier.enc>",
             ))
-        else:
-            mod_name = entry_display_name(updated)
-            info(tr_multi(
-                f"Modifikis {mod_name}",
-                f"Modified {mod_name}",
-                f"Modifié {mod_name}",
+            raise typer.Exit(1)
+
+        enc_path = dosiero.expanduser().resolve()
+        if not enc_path.exists():
+            error(tr_multi(
+                f"Dosiero ne trovita: {enc_path}",
+                f"File not found: {enc_path}",
+                f"Fichier non trouvé: {enc_path}",
             ))
+            raise typer.Exit(1)
+        if not enc_path.is_file():
+            error(tr_multi(
+                f"Ne estas dosiero: {enc_path}",
+                f"Not a file: {enc_path}",
+                f"Ce n'est pas un fichier: {enc_path}",
+            ))
+            raise typer.Exit(1)
+
+        from A_encik.enc_format import parse_enc_file, validate_enc_entry
+        try:
+            parsed = parse_enc_file(enc_path)
+        except ValueError as exc:
+            error(str(exc))
+            raise typer.Exit(1)
+        errors = validate_enc_entry(parsed)
+        if errors:
+            for e in errors:
+                error(f"Validiga eraro: {e}")
+            raise typer.Exit(1)
+
+        updated = service.update(entry["uuid"], parsed)
+        mod_name = entry_display_name(entry)
+        info(tr_multi(
+            f"Anstataŭigis {mod_name}",
+            f"Replaced {mod_name}",
+            f"Remplacé {mod_name}",
+        ))
         console.print(f"[green]UUID:[/] {updated.get('uuid')}")
 
         if kopii or semantika_kopii:
