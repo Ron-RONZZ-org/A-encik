@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,116 @@ def repair_db() -> bool:
     return _repair_if_corrupted()
 
 
+def _backup_db() -> None:
+    """Snapshot the DB file before schema-altering operations.
+
+    Creates ``encik.db.bak`` (overwrites any previous backup).
+    No-op if the DB file doesn't exist yet.
+    """
+    if _DB_FILE.exists():
+        _bak = _DB_FILE.with_suffix(".db.bak")
+        try:
+            shutil.copy2(str(_DB_FILE), str(_bak))
+        except Exception:
+            pass  # Backup is best-effort
+
+
+def _readonly_recover() -> SQLiteDB | None:
+    """Attempt read-only recovery when DB is corrupted.
+
+    Opens the database in ``mode=ro`` which bypasses write-path corruption.
+    If the main ``encik`` table is readable, exports all entries into a
+    freshly created ``encik_recovered.db`` and returns a connection to it.
+
+    Returns:
+        New ``SQLiteDB`` instance on success, ``None`` if recovery fails.
+    """
+    try:
+        _ro = sqlite3.connect(f"file:{_DB_FILE}?mode=ro", uri=True, timeout=10)
+        _tables = _ro.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        _table_names = {t[0] for t in _tables}
+        if "encik" not in _table_names:
+            _ro.close()
+            return None
+
+        _count = _ro.execute("SELECT COUNT(*) FROM encik").fetchone()[0]
+        if _count == 0:
+            _ro.close()
+            return None
+
+        # Build recovery target
+        from A import info as _info, tr_multi as _tr
+        _info(_tr(
+            "Provas reakiri {n} enskribojn...",
+            "Attempting to recover {n} entries...",
+            "Tentative de récupération de {n} entrées...",
+        ).format(n=_count))
+
+        _rec = _DB_FILE.with_name("encik_recovered.db")
+        if _rec.exists():
+            _rec.unlink()
+
+        _new = sqlite3.connect(str(_rec), timeout=30)
+        _new.execute("PRAGMA journal_mode=WAL")
+
+        # Recreate schema from corrupted DB's sqlite_master
+        _schema_rows = _ro.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%' "
+            "ORDER BY rootpage"
+        ).fetchall()
+        for (_sql,) in _schema_rows:
+            if _sql:
+                _new.execute(_sql)
+
+        # Copy rows from each table (encik + supporting)
+        for _tn in sorted(_table_names):
+            if _tn.startswith("sqlite_") or "_fts" in _tn:
+                continue
+            try:
+                _rows = _ro.execute(f'SELECT * FROM "{_tn}"').fetchall()
+                _col_info = _ro.execute(f'PRAGMA table_info("{_tn}")').fetchall()
+                _cols = [c[1] for c in _col_info]
+                _csv = ", ".join(f'"{c}"' for c in _cols)
+                _ph = ", ".join(["?"] * len(_cols))
+                for _row in _rows:
+                    try:
+                        _new.execute(
+                            f'INSERT INTO "{_tn}" ({_csv}) VALUES ({_ph})',
+                            _row,
+                        )
+                    except Exception:
+                        pass  # Skip problematic rows
+            except Exception:
+                pass  # Skip corrupted tables
+
+        _new.commit()
+
+        # Verify and return
+        _final = _new.execute("SELECT COUNT(*) FROM encik").fetchone()[0]
+        _new.close()
+        _ro.close()
+
+        if _final > 0:
+            # Swap files
+            _bak = _DB_FILE.with_suffix(".db.dead")
+            shutil.move(str(_DB_FILE), str(_bak))
+            shutil.move(str(_rec), str(_DB_FILE))
+            for _sfx in ("-wal", "-shm"):
+                (_DB_FILE.parent / (_DB_FILE.name + _sfx)).unlink(missing_ok=True)
+            _info(_tr(
+                "Reakiris {n} enskribojn (malnova DB: {bak})",
+                "Recovered {n} entries (old DB: {bak})",
+                "Récupéré {n} entrées (ancienne DB: {bak})",
+            ).format(n=_final, bak=_bak.name))
+            return SQLiteDB(_DB_FILE)
+    except Exception:
+        pass
+    return None
+
+
 _db_instance: SQLiteDB | None = None
 _repair_checked: bool = False  # Only check corruption once per process
 
@@ -168,6 +279,8 @@ def get_db() -> SQLiteDB:
             _db_instance = None
 
     if _db_instance is None:
+        # Backup before any DDL
+        _backup_db()
         _db_instance = SQLiteDB(_DB_FILE)
 
     # Initialize schema and run migrations.
@@ -198,13 +311,18 @@ def get_db() -> SQLiteDB:
         # Init semantika cache table (lazy import avoids circular dep)
         from A_encik.data.semantika_cache import init_cache_table as _init_cache
         _init_cache(_db_instance)
-    except sqlite3.DatabaseError as exc:
+    except sqlite3.DatabaseError:
         _db_instance.close()
         _db_instance = None
-        raise RuntimeError(
-            f"Datumbazo estas koruptita: {exc}\n"
-            f"Provu: sqlite3 ~/.local/share/A/encik.db \".recover\" | sqlite3 ~/.local/share/A/encik_recovered.db"
-        ) from exc
+        # Try read-only recovery before giving up
+        _ro = _readonly_recover()
+        if _ro is not None:
+            _db_instance = _ro
+        else:
+            raise RuntimeError(
+                f"Datumbazo estas koruptita. Reakiro ne eblas.\n"
+                f"Reimportu de .enc dosieroj: for f in *.enc; do A encik aldoni \"$f\"; done"
+            )
 
     # Reset service singleton so it picks up the fresh DB
     import A_encik.service as _svc
