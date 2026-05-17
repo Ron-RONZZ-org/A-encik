@@ -189,6 +189,34 @@ All A-ecosystem development **must** use `uv` as the package manager:
 - Don't implement utilities that should be in core
 - **generi/semantika**: requires A-AI rewrite — implement as TODO stubs
 
+## Database Schema Migrations
+
+Schema changes (column additions, removals, renames) run on every `get_db()` 
+call in `data/storage.py`. When removing a legacy column:
+
+1. **Drop dependent indexes first** — SQLite refuses `DROP COLUMN` if 
+   any index references the column. Check with:
+   ```sql
+   SELECT name FROM sqlite_master WHERE type='index' AND sql LIKE '%col_name%'
+   ```
+2. **Backfill data** from the old column to the new representation before dropping.
+3. **Wrap in try/except with logging** — never use `except Exception: pass`.
+4. **Set fallback in application code** so entry creation doesn't crash on old DBs
+   that still have the `NOT NULL` constraint.
+
+### Example: `titolo` removal
+
+```python
+# storage.py: drop dependent indexes + column
+for _idx in ("idx_encik_titolo_lower", "idx_encik_titolo_fold"):
+    db.execute(f"DROP INDEX IF EXISTS {_idx}")
+db.execute("ALTER TABLE encik DROP COLUMN titolo")
+
+# service.py: set fallback for backward compat
+if "titolo" not in data:
+    data["titolo"] = data.get("terminologio", {}).get("eo", "")
+```
+
 ## Migration from autish
 
 A-encik supports migration from autish encik.db:
