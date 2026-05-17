@@ -55,16 +55,19 @@ def migrate() -> dict:
             datumo = _parse_json_field(row, "datumo")
             semantika = _parse_json_field(row, "semantika")
             
+            # Backfill terminologio from legacy titolo if empty
+            if not terminologio and row.get("titolo"):
+                terminologio = {"eo": str(row["titolo"])}
+
             # Insert into A-encik, preserving timestamps
             target.execute(
                 """INSERT INTO encik (
-                    uuid, titolo, difinio, terminologio, difinoj, enhavo,
+                    uuid, difinio, terminologio, difinoj, enhavo,
                     superklaso, ligilo, fonto, citajo, datumo, semantika,
                     kreita_je, modifita_je
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     row["uuid"],
-                    row["titolo"],
                     row["difinio"],
                     json.dumps(terminologio),
                     json.dumps(difinoj),

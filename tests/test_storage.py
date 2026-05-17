@@ -48,10 +48,10 @@ class TestRowToDict:
         """Test JSON list fields are parsed."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
             "superklaso": '["uuid1", "uuid2"]',
             "ligilo": '["uuid3"]',
             "fonto": "[]",
+            "terminologio": '{"eo": "testo"}',
         }
         result = row_to_dict(row)
         assert result["superklaso"] == ["uuid1", "uuid2"]
@@ -62,7 +62,6 @@ class TestRowToDict:
         """Test JSON dict fields are parsed."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
             "terminologio": '{"eo": "testo", "en": "test"}',
             "difinoj": '{"eo": "difino"}',
         }
@@ -74,27 +73,45 @@ class TestRowToDict:
         """Test source field becomes fonto."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
             "source": '["source1"]',
+            "terminologio": '{"eo": "testo"}',
         }
         result = row_to_dict(row)
         assert result["fonto"] == ["source1"]
     
-    def test_backward_compat_missing_terminologio(self):
-        """Test missing terminologio defaults to {lang: titolo}."""
+    def test_missing_terminologio_defaults_to_empty(self):
+        """Test missing terminologio defaults to empty dict (titolo column gone)."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "My Title",
+            "difinio": "My definition",
         }
         result = row_to_dict(row)
-        assert result["terminologio"] == {"eo": "My Title"}
+        assert result["terminologio"] == {}
+    
+    def test_titolo_synthesized_from_terminologio(self):
+        """Test entry.titolo is populated from terminologio for display compat."""
+        row = {
+            "uuid": "test-uuid",
+            "terminologio": '{"eo": "testo", "en": "test"}',
+        }
+        result = row_to_dict(row)
+        assert result["titolo"] == "testo"  # first value from terminologio
+    
+    def test_titolo_empty_when_terminologio_empty(self):
+        """Test titolo not set when terminologio has no values."""
+        row = {
+            "uuid": "test-uuid",
+            "terminologio": "{}",
+        }
+        result = row_to_dict(row)
+        assert "titolo" not in result
     
     def test_backward_compat_missing_difinoj(self):
         """Test missing difinoj defaults to {lang: difinio}."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
             "difinio": "My definition",
+            "terminologio": '{"eo": "testo"}',
         }
         result = row_to_dict(row)
         assert result["difinoj"] == {"eo": "My definition"}
@@ -103,7 +120,7 @@ class TestRowToDict:
         """Test missing enhavo defaults to empty string."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
+            "terminologio": '{"eo": "testo"}',
         }
         result = row_to_dict(row)
         assert result["enhavo"] == ""
@@ -112,7 +129,7 @@ class TestRowToDict:
         """Test missing citajo defaults to empty list."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
+            "terminologio": '{"eo": "testo"}',
         }
         result = row_to_dict(row)
         assert result["citajo"] == []
@@ -121,7 +138,7 @@ class TestRowToDict:
         """Test missing datumo defaults to empty dict."""
         row = {
             "uuid": "test-uuid",
-            "titolo": "Test",
+            "terminologio": '{"eo": "testo"}',
         }
         result = row_to_dict(row)
         assert result["datumo"] == {}

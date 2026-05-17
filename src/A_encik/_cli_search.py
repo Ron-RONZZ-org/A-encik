@@ -123,7 +123,8 @@ def register_commands(app: typer.Typer) -> None:
             if kopii or semantika_kopii:
                 copy_entry_reference(target, semantika=semantika_kopii)
             if html:
-                from A_encik.display import render_linked_graph_html, preview_html
+                from A_encik._display_graph import render_linked_graph_html
+                from A_encik.display import preview_html
                 graph_html = render_linked_graph_html(target, max_depth=2)
                 preview_html(graph_html, open_browser=True, title=target.get("titolo", "encik"))
                 info(tr_multi("Malfermis grafikon en retumilo", "Opened graph in browser", "Graphe ouvert dans le navigateur"))
