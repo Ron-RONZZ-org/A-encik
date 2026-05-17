@@ -60,6 +60,10 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin, SearchMi
         """Create with JSON serialization. FTS indexing handled by parent."""
         term = data.get("terminologio") or {}
         data["terminologio_search"] = self._ensure_terminologio_search(term)
+        # Set titolo from terminologio for backward compat (old DBs still have the column)
+        if "titolo" not in data:
+            eo = term.get("eo") or next(iter(term.values()), "")
+            data["titolo"] = eo
         try:
             data = self._serialize(data)
             result = super().create(data)

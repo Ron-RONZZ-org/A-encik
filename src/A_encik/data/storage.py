@@ -297,8 +297,10 @@ def migrate_db(db: SQLiteDB) -> None:
         # Drop the legacy column
         try:
             db.execute("ALTER TABLE encik DROP COLUMN titolo")
-        except Exception:
-            pass  # SQLite < 3.35.0 cannot DROP COLUMN; column is harmless
+        except Exception as _ex:
+            from A import warning as _warn
+            _warn(f"Unable to drop legacy 'titolo' column ({_ex}). "
+                  "Entry creation must include 'titolo' for backward compat.")
 
     # Create index after ensuring column exists
     db.execute(
