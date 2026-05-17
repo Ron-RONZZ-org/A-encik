@@ -376,7 +376,7 @@ class TestDisplayKaTeX:
         from A_encik.display_helpers import has_non_cli_renderable_markup
 
         # Force --open to False even if content has katex
-        monkeypatch.setattr("A_encik.display.preview_html", lambda html, open_browser=False, title=None: tmp_path / "preview.html")
+        monkeypatch.setattr("A_encik._display_entry.preview_html", lambda html, open_browser=False, title=None: tmp_path / "preview.html")
 
         entry = {
             "uuid": "abc12345-1234-5678-9abc-def012345678",

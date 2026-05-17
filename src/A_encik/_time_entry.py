@@ -42,7 +42,6 @@ class TimeEntryMixin:
         if existing:
             return existing["uuid"][:8]
         data: dict[str, Any] = {
-            "titolo": titolo,
             "terminologio": {"eo": titolo},
             "difinoj": {"eo": f"Tipo: {titolo}"},
         }

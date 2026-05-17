@@ -194,7 +194,6 @@ class TestEncikServiceIntegration:
     def test_create_entry(self, service):
         """Test creating an entry."""
         data = {
-            "titolo": "Test Entry",
             "difinio": "Test definition",
             "terminologio": {"eo": "testo"},
         }
@@ -202,27 +201,27 @@ class TestEncikServiceIntegration:
         entry = service.create(data)
         
         assert "uuid" in entry
-        assert entry["titolo"] == "Test Entry"
+        # titolo is synthesized from terminologio by row_to_dict
+        assert entry["titolo"] == "testo"
         assert entry["difinio"] == "Test definition"
         # JSON field should be deserialized
         assert entry["terminologio"] == {"eo": "testo"}
     
     def test_create_entry_with_empty_terminologio(self, service):
-        """Test creating an entry with empty terminologio (should use fallback titolo)."""
+        """Test creating an entry with empty terminologio (no titolo synthesized)."""
         data = {
             "terminologio": {"eo": ""},
             "difinoj": {"eo": "some def"},
         }
         entry = service.create(data)
         assert "uuid" in entry
-        # Should have fallback titolo "sen-titolo"
-        assert "titolo" in entry
-        assert entry["titolo"] == "sen-titolo"
+        # No titolo since terminologio has no non-empty values
+        assert "titolo" not in entry
 
     def test_get_entry(self, service):
         """Test getting an entry."""
         data = {
-            "titolo": "Get Test",
+            "terminologio": {"eo": "Get Test"},
             "difinio": "Definition",
         }
         
@@ -238,8 +237,8 @@ class TestEncikServiceIntegration:
     def test_list_entries(self, service):
         """Test listing entries."""
         # Create a few entries
-        service.create({"titolo": "Entry 1", "difinio": "Def 1"})
-        service.create({"titolo": "Entry 2", "difinio": "Def 2"})
+        service.create({"terminologio": {"eo": "Entry 1"}, "difinio": "Def 1"})
+        service.create({"terminologio": {"eo": "Entry 2"}, "difinio": "Def 2"})
         
         entries = service.list()
         
@@ -248,7 +247,7 @@ class TestEncikServiceIntegration:
     def test_find_by_titolo(self, service):
         """Test finding by title."""
         data = {
-            "titolo": "FindMe Title",
+            "terminologio": {"eo": "FindMe Title"},
             "difinio": "Find def",
         }
         
@@ -262,7 +261,7 @@ class TestEncikServiceIntegration:
     def test_find_by_titolo_case_insensitive(self, service):
         """Test case-insensitive title search."""
         data = {
-            "titolo": "CaseTest",
+            "terminologio": {"eo": "CaseTest"},
             "difinio": "Def",
         }
         
@@ -274,7 +273,7 @@ class TestEncikServiceIntegration:
     
     def test_find_by_uuid_prefix(self, service):
         """Test finding by UUID prefix."""
-        data = {"titolo": "Prefix Test", "difinio": "Def"}
+        data = {"terminologio": {"eo": "Prefix Test"}, "difinio": "Def"}
         
         created = service.create(data)
         prefix = created["uuid"][:4]
@@ -286,33 +285,30 @@ class TestEncikServiceIntegration:
     def test_update_entry(self, service):
         """Test updating an entry."""
         data = {
-            "titolo": "Original",
+            "terminologio": {"eo": "Original"},
             "difinio": "Original def",
         }
         
         created = service.create(data)
         uuid = created["uuid"]
         
-        updated = service.update(uuid, {"titolo": "Updated"})
+        updated = service.update(uuid, {"terminologio": {"eo": "Updated"}})
         
         assert updated["titolo"] == "Updated"
     
     @pytest.mark.skip(reason="Requires trash table - base CRUDService feature")
     def test_delete_soft(self, service):
         """Test soft delete."""
-        data = {"titolo": "DeleteMe", "difinio": "Def"}
+        data = {"terminologio": {"eo": "DeleteMe"}, "difinio": "Def"}
         
         created = service.create(data)
         uuid = created["uuid"]
         
         service.delete(uuid, soft=True)
-        
-        # Should still be retrievable from trash (not implemented in basic test)
-        # For full test, would check encik_rubujo table
     
     def test_delete_hard(self, service):
         """Test hard delete."""
-        data = {"titolo": "HardDelete", "difinio": "Def"}
+        data = {"terminologio": {"eo": "HardDelete"}, "difinio": "Def"}
         
         created = service.create(data)
         uuid = created["uuid"]
@@ -326,7 +322,7 @@ class TestEncikServiceIntegration:
         """Test entry count."""
         count_before = service.count()
         
-        service.create({"titolo": "Count Test", "difinio": "Def"})
+        service.create({"terminologio": {"eo": "Count Test"}, "difinio": "Def"})
         
         count_after = service.count()
         

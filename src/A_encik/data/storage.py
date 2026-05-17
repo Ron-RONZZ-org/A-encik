@@ -17,7 +17,6 @@ _DB_FILE: Path = _DATA_DIR / "encik.db"
 _CREATE_ENCIK = """
 CREATE TABLE IF NOT EXISTS encik (
     uuid        TEXT PRIMARY KEY,
-    titolo      TEXT NOT NULL DEFAULT '',
     difinio     TEXT NOT NULL DEFAULT '',
     terminologio TEXT NOT NULL DEFAULT '{}',
     terminologio_search TEXT NOT NULL DEFAULT '',
@@ -270,6 +269,37 @@ def migrate_db(db: SQLiteDB) -> None:
                 (folded, r["uuid"]),
             )
 
+    # Migration: drop legacy titolo column (now sourced from terminologio)
+    if "titolo" in cols:
+        # Backfill terminologio from titolo for any old entries that lack it
+        from A.utils.normalize import fold_search_text as _fold
+        _backfill_rows = db.execute(
+            "SELECT uuid, titolo, terminologio FROM encik"
+        )
+        for _r in _backfill_rows:
+            _term_raw = _r["terminologio"]
+            if isinstance(_term_raw, str):
+                try:
+                    _term = json.loads(_term_raw)
+                except (json.JSONDecodeError, ValueError):
+                    _term = {}
+            elif isinstance(_term_raw, dict):
+                _term = _term_raw
+            else:
+                _term = {}
+            if not _term and _r.get("titolo"):
+                _term = {"eo": str(_r["titolo"])}
+                _ts = _fold(str(_r["titolo"]))
+                db.execute(
+                    "UPDATE encik SET terminologio = ?, terminologio_search = ? WHERE uuid = ?",
+                    (json.dumps(_term), _ts, _r["uuid"]),
+                )
+        # Drop the legacy column
+        try:
+            db.execute("ALTER TABLE encik DROP COLUMN titolo")
+        except Exception:
+            pass  # SQLite < 3.35.0 cannot DROP COLUMN; column is harmless
+
     # Create index after ensuring column exists
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_encik_terminologio_search ON encik(terminologio_search)"
@@ -302,8 +332,14 @@ def row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
     if "fonto" not in d and "source" in d:
         d["fonto"] = d.get("source") or []
     if "terminologio" not in d:
-        titolo = str(d.get("titolo") or "").strip()
-        d["terminologio"] = {"eo": titolo} if titolo else {}
+        d["terminologio"] = {}
+    # Synthesize entry["titolo"] from terminologio for backward-compat display code
+    if "titolo" not in d:
+        _term = d.get("terminologio") or {}
+        for _val in _term.values():
+            if _val:
+                d["titolo"] = str(_val)
+                break
     if "difinoj" not in d:
         difinio = str(d.get("difinio") or "").strip()
         d["difinoj"] = {"eo": difinio} if difinio else {}
