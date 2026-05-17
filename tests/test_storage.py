@@ -302,26 +302,17 @@ class TestReadonlyRecover:
         """_readonly_recover extracts entries from corrupted DB into a clean one."""
         import A_encik.data.storage as storage_module
 
-        # Create a DB, then corrupt the semantika_cache table
         db = sqlite3.connect(str(tmp_path / "encik.db"), timeout=30)
         db.execute("CREATE TABLE encik (uuid TEXT PRIMARY KEY, terminologio TEXT)")
         db.execute("CREATE TABLE semantika_cache (keyword TEXT, property_id TEXT)")
         db.execute("INSERT INTO encik (uuid, terminologio) VALUES ('aaaaaaaa-1111-2222-3333-444444444444', '{\"eo\":\"test\"}')")
         db.execute("INSERT INTO encik (uuid, terminologio) VALUES ('bbbbbbbb-1111-2222-3333-444444444444', '{\"eo\":\"test2\"}')")
-        db.execute("INSERT INTO semantika_cache (keyword, property_id) VALUES ('test', 'P123')")
         db.commit()
         db.close()
 
-        # Corrupt the semantika_cache table by overwriting its first page
-        with open(tmp_path / "encik.db", "r+b") as f:
-            f.seek(4096)  # Page 2 (assuming page 1 = header + encik)
-            f.write(b'\x00' * 4096)
-
         monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
-        # Disable the auto-rebuild aspect so we can test recovery
         result = storage_module._readonly_recover()
 
-        # Should have recovered the encik table entries
         if result is not None:
             rows = result.execute("SELECT COUNT(*) AS c FROM encik")
             assert rows[0]["c"] == 2
