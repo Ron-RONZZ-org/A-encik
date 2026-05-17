@@ -169,36 +169,41 @@ def get_db() -> SQLiteDB:
     if _db_instance is None:
         _db_instance = SQLiteDB(_DB_FILE)
 
-    # If the FTS table has wrong columns (schema changed), drop it first
-    # using a fresh connection to avoid WAL state conflicts with the
-    # cached connection that will be used for subsequent DDL.
-    _fts_name = ENCIK_FTS_CONFIG.fts_table
+    # Initialize schema and run migrations.
+    # If the DB is corrupted these may fail — catch and surface a clear message.
     try:
-        _fts_row = _db_instance.execute_one(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
-            (_fts_name,)
-        )
-        if _fts_row:
-            _fts_sql = _fts_row.get("sql", "")
-            _expected = set(ENCIK_FTS_CONFIG.fts_columns)
-            _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
-            if _actual != _expected:
-                _db_instance.close()
-                with SQLiteDB(_DB_FILE).raw_connection() as _raw:
-                    _raw.execute(f"DROP TABLE IF EXISTS {_fts_name}")
-                    _raw.commit()
-                _db_instance = SQLiteDB(_DB_FILE)
-    except Exception:
-        _db_instance = SQLiteDB(_DB_FILE)
+        # If the FTS table has wrong columns (schema changed), drop it first
+        _fts_name = ENCIK_FTS_CONFIG.fts_table
+        try:
+            _fts_row = _db_instance.execute_one(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (_fts_name,)
+            )
+            if _fts_row:
+                _fts_sql = _fts_row.get("sql", "")
+                _expected = set(ENCIK_FTS_CONFIG.fts_columns)
+                _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
+                if _actual != _expected:
+                    _db_instance.close()
+                    _db_instance = SQLiteDB(_DB_FILE)
+        except Exception:
+            _db_instance = SQLiteDB(_DB_FILE)
 
-    _db_instance.execute(_CREATE_ENCIK)
-    for stmt in _CREATE_ENCIK_INDEXES.strip().split(";"):
-        if stmt.strip():
-            _db_instance.execute(stmt)
-    migrate_db(_db_instance)
-    # Init semantika cache table (lazy import avoids circular dep)
-    from A_encik.data.semantika_cache import init_cache_table as _init_cache
-    _init_cache(_db_instance)
+        _db_instance.execute(_CREATE_ENCIK)
+        for stmt in _CREATE_ENCIK_INDEXES.strip().split(";"):
+            if stmt.strip():
+                _db_instance.execute(stmt)
+        migrate_db(_db_instance)
+        # Init semantika cache table (lazy import avoids circular dep)
+        from A_encik.data.semantika_cache import init_cache_table as _init_cache
+        _init_cache(_db_instance)
+    except sqlite3.DatabaseError as exc:
+        _db_instance.close()
+        _db_instance = None
+        raise RuntimeError(
+            f"Datumbazo estas koruptita: {exc}. "
+            f"Forigu la dosieron kaj reimportu: rm -f {_DB_FILE}*"
+        ) from exc
 
     # Reset service singleton so it picks up the fresh DB
     import A_encik.service as _svc

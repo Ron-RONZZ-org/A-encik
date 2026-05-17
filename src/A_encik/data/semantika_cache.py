@@ -125,16 +125,31 @@ def _try_repair_db() -> None:
 def init_cache_table(db=None) -> None:
     """Ensure the cache table exists, seeding common properties if empty.
 
+    Handles DB corruption gracefully — if the table is corrupted, it's
+    dropped and recreated.
+
     Args:
         db: SQLiteDB instance (provided by storage.py to avoid circular imports)
     """
     if db is None:
         db = _get_db()
-    db.execute(CREATE_SEMANTIKA_CACHE)
-    # Seed common properties if the cache is empty (fresh DB or after repair)
-    row = db.execute_one("SELECT COUNT(*) AS cnt FROM semantika_cache")
-    if row and row.get("cnt", 0) == 0:
-        _seed_common_properties(db)
+    try:
+        db.execute(CREATE_SEMANTIKA_CACHE)
+        row = db.execute_one("SELECT COUNT(*) AS cnt FROM semantika_cache")
+        if row and row.get("cnt", 0) == 0:
+            _seed_common_properties(db)
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "malformed" in msg or "disk i/o" in msg:
+            # Cache table is corrupted — drop and recreate
+            try:
+                db.execute("DROP TABLE IF EXISTS semantika_cache")
+                db.execute(CREATE_SEMANTIKA_CACHE)
+                _seed_common_properties(db)
+            except Exception:
+                pass  # Give up; cache repopulates on next lookup
+        else:
+            raise
 
 
 def _seed_common_properties(db) -> None:
