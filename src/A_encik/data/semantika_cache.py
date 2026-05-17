@@ -48,6 +48,8 @@ def _try_repair_db() -> None:
     Delegates to ``storage.repair_db()`` which closes the singleton,
     purges stale WAL/SHM files, runs integrity check, and recreates
     the semantika_cache table if needed.
+    After repair, clears negative cache entries (they may have been
+    stored based on corrupted data).
     Safe to call speculatively — no-op on healthy DB.
     """
     global _repair_attempted
@@ -56,7 +58,16 @@ def _try_repair_db() -> None:
     _repair_attempted = True
     try:
         from A_encik.data.storage import repair_db
-        repair_db()
+        if repair_db():
+            # Clear negative cache after successful repair
+            try:
+                from A_encik.data.storage import get_db
+                db = get_db()
+                db.execute(
+                    "DELETE FROM semantika_cache WHERE property_id = '_NEGATIVE_'"
+                )
+            except Exception:
+                pass
     except Exception:
         pass
 
