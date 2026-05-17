@@ -199,23 +199,11 @@ def get_db() -> SQLiteDB:
         from A_encik.data.semantika_cache import init_cache_table as _init_cache
         _init_cache(_db_instance)
     except sqlite3.DatabaseError as exc:
-        msg = str(exc).lower()
-        if "malformed" in msg:
-            # Could be a corrupted semantika_cache — try dropping and recreating it
-            try:
-                _db_instance.execute("DROP TABLE IF EXISTS semantika_cache")
-                _init_cache(_db_instance)
-                # Also reset service singleton for fresh state
-                import A_encik.service as _svc
-                _svc._encik_service = None
-                return _db_instance
-            except Exception:
-                pass
         _db_instance.close()
         _db_instance = None
         raise RuntimeError(
             f"Datumbazo estas koruptita: {exc}\n"
-            f"Provu: rm -f ~/.local/share/A/encik.db*"
+            f"Provu: sqlite3 ~/.local/share/A/encik.db \".recover\" | sqlite3 ~/.local/share/A/encik_recovered.db"
         ) from exc
 
     # Reset service singleton so it picks up the fresh DB
