@@ -52,9 +52,9 @@ def ensure_dirs() -> None:
 def _repair_if_corrupted() -> bool:
     """Check and repair database if corrupted.
 
-    Purges stale WAL+SHM files and rebuilds the FTS5 table if needed.
-    The FTS5 virtual table can retain internal corruption even after
-    WAL cleanup — the only fix is to drop and recreate it.
+    Purges stale WAL+SHM files, then attempts VACUUM rebuild.
+    If the semantika_cache table is corrupted, drops and recreates it
+    (data loss is acceptable — it repopulates from CSV/Wikidata).
 
     Returns:
         True if repair was attempted, False if nothing was needed.
@@ -80,8 +80,41 @@ def _repair_if_corrupted() -> bool:
     try:
         _conn = sqlite3.connect(str(_DB_FILE))
         (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+        if _result == "ok":
+            _conn.close()
+            return True
+        # Still corrupted — try VACUUM rebuild
+        try:
+            _conn.execute("VACUUM")
+            (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+            if _result == "ok":
+                _conn.close()
+                return True
+        except Exception:
+            pass
+        # VACUUM didn't fix it — drop and recreate semantika_cache
+        try:
+            _conn.execute("DROP TABLE IF EXISTS semantika_cache")
+            _conn.execute(
+                """CREATE TABLE IF NOT EXISTS semantika_cache (
+                    keyword     TEXT NOT NULL,
+                    property_id TEXT NOT NULL,
+                    label_en    TEXT NOT NULL DEFAULT '',
+                    label_eo    TEXT DEFAULT '',
+                    description TEXT DEFAULT '',
+                    source      TEXT DEFAULT 'api',
+                    fetched_at  TEXT NOT NULL,
+                    hit_count   INTEGER DEFAULT 1,
+                    PRIMARY KEY (keyword, property_id)
+                )"""
+            )
+            (_result,) = _conn.execute("PRAGMA quick_check").fetchone()
+            _conn.close()
+            return _result == "ok"
+        except Exception:
+            pass
         _conn.close()
-        return _result == "ok"
+        return False
     except Exception:
         return False
 
