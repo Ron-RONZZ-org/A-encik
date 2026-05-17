@@ -264,9 +264,9 @@ def _query_wikidata_api(keyword: str, retries: int = 2) -> list[dict] | None:
     """
     global _last_api_failure
 
-    # Circuit breaker: skip if API failed recently
+    # Circuit breaker: warn if active but still try the API
     if time.time() - _last_api_failure < _CIRCUIT_BREAKER_SECONDS:
-        return None
+        _warn("Wikidata API circuit breaker active — retrying anyway")
 
     for attempt in range(1, retries + 2):  # initial + retries
         try:
