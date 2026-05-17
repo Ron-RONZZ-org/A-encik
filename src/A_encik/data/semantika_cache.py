@@ -37,14 +37,23 @@ CREATE TABLE IF NOT EXISTS semantika_cache (
 CACHE_TTL_DAYS = 7
 CACHE_TTL_SECONDS = CACHE_TTL_DAYS * 86400
 
+# Repair state: track whether we've already attempted DB repair this session.
+# Prevents repeated warnings and re-repair attempts on persistent corruption.
+_repair_attempted: bool = False
+
 
 def _try_repair_db() -> None:
-    """Attempt DB repair when cache operations fail due to corruption.
+    """Attempt DB repair once per session when cache operations fail.
 
     Delegates to ``storage.repair_db()`` which closes the singleton,
-    purges stale WAL/SHM files, and runs integrity check.
+    purges stale WAL/SHM files, runs integrity check, and recreates
+    the semantika_cache table if needed.
     Safe to call speculatively — no-op on healthy DB.
     """
+    global _repair_attempted
+    if _repair_attempted:
+        return
+    _repair_attempted = True
     try:
         from A_encik.data.storage import repair_db
         repair_db()
@@ -163,11 +172,13 @@ def _check_db_cache(keyword: str) -> list[dict] | None:
         msg = str(e).lower()
         if "disk is full" in msg:
             raise  # Disk full — re-raise, repair won't help
-        _warn(f"SQLite cache unavailable: {e}")
+        if not _repair_attempted:
+            _warn(f"SQLite cache unavailable: {e}")
         _try_repair_db()
         return None
     except sqlite3.Error as e:
-        _warn(f"SQLite cache error: {e}")
+        if not _repair_attempted:
+            _warn(f"SQLite cache error: {e}")
         return None
         if rows:
             # Update hit counts
