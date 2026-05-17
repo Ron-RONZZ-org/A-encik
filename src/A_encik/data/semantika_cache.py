@@ -116,21 +116,14 @@ def _try_repair_db() -> None:
     try:
         from A_encik.data.storage import repair_db
         if repair_db():
-            # Clear negative cache after successful repair
-            try:
-                from A_encik.data.storage import get_db
-                db = get_db()
-                db.execute(
-                    "DELETE FROM semantika_cache WHERE property_id = '_NEGATIVE_'"
-                )
-            except Exception:
+                # init_cache_table() seeds common properties on next get_db()
                 pass
     except Exception:
         pass
 
 
 def init_cache_table(db=None) -> None:
-    """Ensure the cache table exists.
+    """Ensure the cache table exists, seeding common properties if empty.
 
     Args:
         db: SQLiteDB instance (provided by storage.py to avoid circular imports)
@@ -138,6 +131,31 @@ def init_cache_table(db=None) -> None:
     if db is None:
         db = _get_db()
     db.execute(CREATE_SEMANTIKA_CACHE)
+    # Seed common properties if the cache is empty (fresh DB or after repair)
+    row = db.execute_one("SELECT COUNT(*) AS cnt FROM semantika_cache")
+    if row and row.get("cnt", 0) == 0:
+        _seed_common_properties(db)
+
+
+def _seed_common_properties(db) -> None:
+    """Insert the pre-seeded COMMON_PROPERTIES into the cache table.
+
+    These entries serve as base cache so common lookups never hit the API.
+    Marked with source='common' for observability.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    for keyword, results in COMMON_PROPERTIES.items():
+        for prop in results:
+            try:
+                db.execute(
+                    """INSERT OR IGNORE INTO semantika_cache
+                       (keyword, property_id, label_en, description, source, fetched_at)
+                       VALUES (?, ?, ?, ?, 'common', ?)""",
+                    (keyword, prop["id"], prop["label"], prop["description"], now),
+                )
+            except Exception:
+                pass
 
 
 def _get_db():
