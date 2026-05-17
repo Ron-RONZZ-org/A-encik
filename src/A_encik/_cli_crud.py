@@ -173,14 +173,12 @@ def register_commands(app: typer.Typer) -> None:
             ...,
             help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
         ),
-        dosiero: Optional[str] = typer.Option(
+        dosiero: Optional[Path] = typer.Argument(
             None,
-            "-D",
-            "--dosiero",
             help=tr_multi(
-                "Nova .enc dosiero por rekta anstataŭigo",
-                "New .enc file for direct replacement",
-                "Nouveau fichier .enc pour remplacement direct",
+                "Nova .enc dosiero por rekta anstataŭigo (pozicia argumento)",
+                "New .enc file for direct replacement (positional argument)",
+                "Nouveau fichier .enc pour remplacement direct (argument positionnel)",
             ),
         ),
         titolo: Optional[str] = typer.Option(None, "-t", "--titolo", help=tr_multi("Nova titolo", "New title", "Nouveau titre")),
@@ -249,9 +247,9 @@ def register_commands(app: typer.Typer) -> None:
             error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
             raise typer.Exit(1)
 
-        # If --dosiero provided, parse .enc and do full replacement
+        # If dosiero positional arg provided, parse .enc and do full replacement
         if dosiero is not None:
-            enc_path = Path(dosiero).expanduser().resolve()
+            enc_path = dosiero.expanduser().resolve()
             if not enc_path.exists():
                 error(tr_multi(
                     f"Dosiero ne trovita: {enc_path}",
@@ -283,8 +281,16 @@ def register_commands(app: typer.Typer) -> None:
             data = {}
             if titolo:
                 data["titolo"] = titolo
+                # Also update terminologio (terminologio is canonical for display)
+                term = dict(entry.get("terminologio") or {})
+                term["eo"] = titolo
+                data["terminologio"] = term
             if difinio is not None:
                 data["difinio"] = difinio
+                # Also update difinoj (difinoj is canonical for display)
+                defs = dict(entry.get("difinoj") or {})
+                defs["eo"] = difinio
+                data["difinoj"] = defs
             if enhavo is not None:
                 data["enhavo"] = enhavo
 

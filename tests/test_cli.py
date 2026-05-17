@@ -222,7 +222,7 @@ class TestModifiCommand:
             'terminologio.eo = "Modifita"\ndifino.eo = "nova difino"\n',
             encoding="utf-8",
         )
-        r2 = runner.invoke(app, ["modifi", "Origino", "--dosiero", str(repl)])
+        r2 = runner.invoke(app, ["modifi", "Origino", str(repl)])
         assert r2.exit_code == 0
         assert "anstataŭigis" in r2.output.lower() or "replaced" in r2.output.lower()
 
