@@ -207,6 +207,18 @@ class TestEncikServiceIntegration:
         # JSON field should be deserialized
         assert entry["terminologio"] == {"eo": "testo"}
     
+    def test_create_entry_with_empty_terminologio(self, service):
+        """Test creating an entry with empty terminologio (should use fallback titolo)."""
+        data = {
+            "terminologio": {"eo": ""},
+            "difinoj": {"eo": "some def"},
+        }
+        entry = service.create(data)
+        assert "uuid" in entry
+        # Should have fallback titolo "sen-titolo"
+        assert "titolo" in entry
+        assert entry["titolo"] == "sen-titolo"
+
     def test_get_entry(self, service):
         """Test getting an entry."""
         data = {

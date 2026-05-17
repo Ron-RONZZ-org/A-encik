@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 from typing import Any
 
 from A.core.service import CRUDService
@@ -74,8 +75,17 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                     if val:
                         data["titolo"] = str(val)
                         break
-        data = self._serialize(data)
-        result = super().create(data)
+        # Hard fallback: ensure titolo is always set even if all
+        # terminologio values are empty. titolo is NOT NULL in the DB.
+        if "titolo" not in data:
+            data["titolo"] = "sen-titolo"
+        try:
+            data = self._serialize(data)
+            result = super().create(data)
+        except sqlite3.IntegrityError as exc:
+            raise ValueError(
+                f"Datumbaza konstricefkizo (kodo={exc.sqlite_errorcode}): {exc}"
+            ) from exc
         entry = self._deserialize_row(result)
         self._sync_links(entry)
         return entry
@@ -87,7 +97,12 @@ class EncikService(CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
                 data["terminologio"]
             )
         data = self._serialize(data)
-        result = super().update(uuid, data)
+        try:
+            result = super().update(uuid, data)
+        except sqlite3.IntegrityError as exc:
+            raise ValueError(
+                f"Datumbaza konstricefkizo (kodo={exc.sqlite_errorcode}): {exc}"
+            ) from exc
         entry = self._deserialize_row(result)
         self._sync_links(entry)
         return entry

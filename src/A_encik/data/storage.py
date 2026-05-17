@@ -17,7 +17,7 @@ _DB_FILE: Path = _DATA_DIR / "encik.db"
 _CREATE_ENCIK = """
 CREATE TABLE IF NOT EXISTS encik (
     uuid        TEXT PRIMARY KEY,
-    titolo      TEXT,
+    titolo      TEXT NOT NULL DEFAULT '',
     difinio     TEXT NOT NULL DEFAULT '',
     terminologio TEXT NOT NULL DEFAULT '{}',
     terminologio_search TEXT NOT NULL DEFAULT '',
