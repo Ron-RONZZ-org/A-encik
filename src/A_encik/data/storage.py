@@ -294,9 +294,17 @@ def migrate_db(db: SQLiteDB) -> None:
                     "UPDATE encik SET terminologio = ?, terminologio_search = ? WHERE uuid = ?",
                     (json.dumps(_term), _ts, _r["uuid"]),
                 )
-        # Drop the legacy column
+        # Drop the legacy column and its dependent indexes
         try:
+            for _idx in ("idx_encik_titolo_lower", "idx_encik_titolo_fold",
+                         "idx_encik_titolo_fold_idx"):
+                db.execute(f"DROP INDEX IF EXISTS {_idx}")
             db.execute("ALTER TABLE encik DROP COLUMN titolo")
+            # Also drop titolo_fold if it still exists (another legacy column)
+            try:
+                db.execute("ALTER TABLE encik DROP COLUMN titolo_fold")
+            except Exception:
+                pass  # May already be gone
         except Exception as _ex:
             from A import warning as _warn
             _warn(f"Unable to drop legacy 'titolo' column ({_ex}). "
