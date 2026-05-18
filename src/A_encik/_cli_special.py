@@ -78,15 +78,35 @@ def register_commands(app: typer.Typer) -> None:
                 "Reconstruire aussi ligilo et terminologio pour TOUTES les entrées",
             ),
         ),
+        latex: bool = typer.Option(
+            False,
+            "--latex",
+            "-l",
+            help=tr_multi(
+                "Ripari manĝitajn LaTeX-eskapojn (tab anstataŭ \\t)",
+                "Fix mangled LaTeX escapes (tab instead of \\t)",
+                "Corriger les échappements LaTeX corrompus (tab au lieu de \\t)",
+            ),
+        ),
     ) -> None:
         """Reconcile all bidirectional semantic links in the database.
 
         Without --cio: only syncs reverse superklaso→ligilo links.
         With --cio: also rebuilds ligilo from inline refs and
         terminologio_search from terminologio for every entry.
+        With --latex: fix mangled LaTeX escapes (tab/newline → \\t/\\n)
+        in existing entries imported with the old buggy parser.
         """
         service = get_service()
         count = service.reconcile_all_reverse_links()
+
+        if latex:
+            fixed = service.fix_latex_escapes()
+            info(tr_multi(
+                f"Riparis {fixed} eniro(j)n kun manĝitaj LaTeX-eskapoj.",
+                f"Fixed {fixed} entr(ies) with mangled LaTeX escapes.",
+                f"Corrigé {fixed} entrée(s) avec échappements LaTeX corrompus.",
+            ))
 
         if cio:
             rebuilt = service.reconcile_all_computed_fields()

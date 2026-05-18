@@ -76,7 +76,11 @@ def escape_latex_style_backslashes(raw: str) -> str:
             # Inside multiline string: escape backslashes not already escaped
             if ch == "\\" and i + 1 < len(raw):
                 next_ch = raw[i + 1]
-                valid_escapes = {"n", "t", '"', "'", "\\"}
+                # Only keep quote- and backslash-escapes as valid TOML escapes.
+                # DO NOT include n or t — they conflict with LaTeX commands like
+                # \theta, \newcommand, \tau, \times, \to, etc. TOML interprets
+                # \n as newline and \t as tab, mangling LaTeX content.
+                valid_escapes = {'"', "'", "\\"}
                 # Already a valid TOML escape
                 if next_ch in valid_escapes:
                     result.append(ch)
@@ -97,7 +101,8 @@ def escape_latex_style_backslashes(raw: str) -> str:
                 continue
             if ch == "\\" and i + 1 < len(raw):
                 next_ch = raw[i + 1]
-                valid_escapes = {"n", "t", '"', "'", "\\"}
+                # Same as multiline: omit n/t to avoid LaTeX command mangling
+                valid_escapes = {'"', "'", "\\"}
                 # Already a valid TOML escape: \\n, \\t, \\", \\', \\\\
                 if next_ch in valid_escapes:
                     result.append(ch)
