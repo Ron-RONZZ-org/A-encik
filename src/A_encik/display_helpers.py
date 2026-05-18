@@ -62,6 +62,18 @@ def preferred_lang(
     return ""
 
 
+# Regex to strip markdown inline links: [label](#uuid) → label
+_MD_INLINE_LINK = re.compile(r"\[([^\]]+)\]\(#[^)]+\)")
+
+
+def _strip_inline_links(text: str) -> str:
+    """Strip markdown inline link syntax, keeping only the label.
+
+    ``[lumo](#63497d2c)`` → ``lumo``
+    """
+    return _MD_INLINE_LINK.sub(r"\1", text) if text else text
+
+
 def entry_locale_title(
     entry: dict,
     preferred_langs: list[str] | None = None,
@@ -77,6 +89,10 @@ def entry_locale_title(
     6. ``entry["titolo"]``
     7. First available terminologio value
 
+    Inline links (``[label](#uuid)``) in terminologio values are stripped
+    to just ``label`` — the linked entry's title is not resolved here since
+    this function is used in many contexts (candidate tables, clipboard).
+
     Examples:
         >>> entry_locale_title({"titolo": "Test", "terminologio": {"eo": "testo"}})
         'testo'
@@ -86,27 +102,27 @@ def entry_locale_title(
     if preferred_langs:
         for lang in preferred_langs:
             if term.get(lang):
-                return str(term[lang])
+                return _strip_inline_links(str(term[lang]))
 
     raw_env = os.environ.get("LC_ALL") or os.environ.get("LANG") or ""
     env_lang = raw_env.split(".")[0].split("_")[0].lower()
     if env_lang and term.get(env_lang):
-        return str(term[env_lang])
+        return _strip_inline_links(str(term[env_lang]))
 
     # A-core config language (user locale preference)
     try:
         from A.core.config import load_config
         cfg_lang = load_config().language
         if cfg_lang and term.get(cfg_lang):
-            return str(term[cfg_lang])
+            return _strip_inline_links(str(term[cfg_lang]))
     except Exception:
         pass
 
     for lang in ("eo", "en"):
         if term.get(lang):
-            return str(term[lang])
+            return _strip_inline_links(str(term[lang]))
 
-    return str(next(iter(term.values()), ""))
+    return _strip_inline_links(str(next(iter(term.values()), "")))
 
 
 def normalize_lingvo_codes(raw: str | None, field: str = "--lingvo") -> list[str]:
@@ -267,7 +283,7 @@ def display_ligilo_items(entry: dict) -> list[dict]:
     if isinstance(superklaso, str):
         superklaso = [superklaso]
     for parent_ref in superklaso:
-        parent_ref = parent_ref.strip() if isinstance(parent_ref, str) else ""
+        parent_ref = parent_ref.strip().lstrip("#") if isinstance(parent_ref, str) else ""
         if parent_ref and parent_ref not in seen:
             seen.add(parent_ref)
             items.append({"uuid": parent_ref, "tipo": "rdfs:subClassOf"})

@@ -40,7 +40,10 @@ def validate_enc_entry(entry: dict) -> list[str]:
 
 
 def _looks_like_uuid(s: str) -> bool:
-    """Check if a string looks like a UUID (hex with optional hyphens)."""
+    """Check if a string looks like a UUID (hex with optional hyphens).
+
+    Handles ``#`` prefix (autish-legacy convention) by stripping it first.
+    """
     import re
-    cleaned = s.replace("-", "")
+    cleaned = s.lstrip("#").replace("-", "")
     return bool(re.fullmatch(r"[0-9a-fA-F]{8,}", cleaned))

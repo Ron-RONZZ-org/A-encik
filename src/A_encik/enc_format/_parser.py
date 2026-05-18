@@ -168,17 +168,24 @@ def _normalise_fonto_tipo(raw_tipo: str) -> str:
 
 
 def _normalise_superklaso_refs(raw: Any) -> list[str]:
-    """Normalise superklaso references to a list of UUID strings."""
+    """Normalise superklaso references to a list of UUID strings.
+
+    Strips leading ``#`` from any reference (some .enc files store
+    them with the autish-legacy ``#`` prefix convention).
+    """
+    def _clean(val: str) -> str:
+        return val.strip().lstrip("#")
+
     if isinstance(raw, str):
-        return [raw]
+        return [_clean(raw)]
     if isinstance(raw, list):
         result: list[str] = []
         for item in raw:
             if isinstance(item, str):
-                result.append(item)
+                result.append(_clean(item))
             elif isinstance(item, list) and len(item) >= 2:
                 # [title, UUID] pair — take the UUID
-                result.append(str(item[1]))
+                result.append(_clean(str(item[1])))
         return result
     return []
 
