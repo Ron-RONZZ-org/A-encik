@@ -88,17 +88,35 @@ def register_commands(app: typer.Typer) -> None:
                 "Corriger les échappements LaTeX corrompus (tab au lieu de \\t)",
             ),
         ),
+        revert_newlines: bool = typer.Option(
+            False,
+            "--revert-newlines",
+            hidden=True,
+            help=tr_multi(
+                "Malfari difekton de \\n (por retro-ĝisdatigo)",
+                "Revert \\n newline damage (for rollback)",
+                "Annuler les dégâts de \\n (pour rollback)",
+            ),
+        ),
     ) -> None:
         """Reconcile all bidirectional semantic links in the database.
 
         Without --cio: only syncs reverse superklaso→ligilo links.
         With --cio: also rebuilds ligilo from inline refs and
         terminologio_search from terminologio for every entry.
-        With --latex: fix mangled LaTeX escapes (tab/newline → \\t/\\n)
+        With --latex: fix mangled LaTeX escapes (tab → \\t)
         in existing entries imported with the old buggy parser.
         """
         service = get_service()
         count = service.reconcile_all_reverse_links()
+
+        if revert_newlines:
+            reverted = service.undo_newline_damage()
+            info(tr_multi(
+                f"Malfaris {reverted} eniro(j)n (\\n-> vera retpaŭzo).",
+                f"Reverted {reverted} entr(ies) (\\n -> real newline).",
+                f"Annulé {reverted} entrée(s) (\\n -> vrai saut de ligne).",
+            ))
 
         if latex:
             fixed = service.fix_latex_escapes()

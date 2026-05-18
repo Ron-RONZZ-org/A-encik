@@ -351,11 +351,13 @@ class SearchMixin:
     def fix_latex_escapes(self) -> int:
         """Fix mangled LaTeX backslash escapes in existing entries.
 
-        The old ``escape_latex_style_backslashes`` kept ``\\t`` and ``\\n``
-        as valid TOML escapes, causing tomllib to interpret them as tab and
-        newline instead of literal backslash+letter. This method scans all
-        text fields and restores ``\\t`` (tab) → ``\\textbackslash t``
-        and ``\\n`` (newline) → ``\\textbackslash n`` in LaTeX contexts.
+        The old ``escape_latex_style_backslashes`` kept ``\\t`` as a valid
+        TOML escape, causing tomllib to interpret it as tab instead of
+        literal backslash+letter. This method scans all text fields and
+        restores tab (0x09) → ``\\t``.
+
+        NOTE: Does NOT handle ``\\n`` — real newlines (0x0A) in multiline
+        TOML strings are intentional line breaks, not mangled escapes.
 
         Returns:
             Number of entries fixed.
@@ -377,8 +379,8 @@ class SearchMixin:
             # difinoj dict values
             dif = entry.get("difinoj") or {}
             for lang, val in dif.items():
-                if isinstance(val, str) and ("\t" in val or "\n" in val):
-                    cleaned = val.replace("\t", "\\t").replace("\n", "\\n")
+                if isinstance(val, str) and "\t" in val:
+                    cleaned = val.replace("\t", "\\t")
                     if cleaned != val:
                         dif[lang] = cleaned
                         needs_update = True
@@ -386,8 +388,8 @@ class SearchMixin:
             # terminologio dict values
             term = entry.get("terminologio") or {}
             for lang, val in term.items():
-                if isinstance(val, str) and ("\t" in val or "\n" in val):
-                    cleaned = val.replace("\t", "\\t").replace("\n", "\\n")
+                if isinstance(val, str) and "\t" in val:
+                    cleaned = val.replace("\t", "\\t")
                     if cleaned != val:
                         term[lang] = cleaned
                         needs_update = True
@@ -395,10 +397,8 @@ class SearchMixin:
             # difinio and enhavo
             for field_name in ("difinio", "enhavo"):
                 val = entry.get(field_name, "")
-                if isinstance(val, str) and ("\t" in val or "\n" in val):
-                    text_fields[field_name] = (
-                        val.replace("\t", "\\t").replace("\n", "\\n")
-                    )
+                if isinstance(val, str) and "\t" in val:
+                    text_fields[field_name] = val.replace("\t", "\\t")
                     needs_update = True
 
             if not needs_update:
@@ -407,7 +407,78 @@ class SearchMixin:
             # Persist changes
             updates = {}
             if needs_update:
-                # dif and term are mutated in-place (same objects as entry dicts)
+                updates["difinoj"] = json.dumps(dif, ensure_ascii=False)
+                updates["terminologio"] = json.dumps(term, ensure_ascii=False)
+                updates["terminologio_search"] = self._ensure_terminologio_search(term)
+            for fn in ("difinio", "enhavo"):
+                if text_fields[fn] != entry.get(fn, ""):
+                    updates[fn] = text_fields[fn]
+
+            if updates:
+                set_clauses = [f"{k} = ?" for k in updates]
+                values = list(updates.values()) + [entry_uuid]
+                self.db.execute(
+                    f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE uuid = ?",
+                    values,
+                )
+                count += 1
+
+        return count
+
+    def undo_newline_damage(self) -> int:
+        """Revert newline damage from earlier version of ``fix_latex_escapes``.
+
+        The initial implementation wrongly replaced real newlines (0x0A)
+        with literal ``\\n`` (two characters). This method replaces
+        ``\\n`` → real newline in all text fields.
+
+        Returns:
+            Number of entries fixed.
+        """
+        count = 0
+        rows = self.db.execute("SELECT * FROM encik")
+        for row in rows:
+            entry = self._deserialize_row(row)
+            entry_uuid = entry.get("uuid", "")
+            if not entry_uuid:
+                continue
+
+            needs_update = False
+            text_fields: dict[str, Any] = {
+                "difinio": entry.get("difinio", ""),
+                "enhavo": entry.get("enhavo", ""),
+            }
+
+            # difinoj dict values — replace literal \n with real newline
+            dif = entry.get("difinoj") or {}
+            for lang, val in dif.items():
+                if isinstance(val, str) and "\\n" in val:
+                    cleaned = val.replace("\\n", "\n")
+                    if cleaned != val:
+                        dif[lang] = cleaned
+                        needs_update = True
+
+            # terminologio dict values
+            term = entry.get("terminologio") or {}
+            for lang, val in term.items():
+                if isinstance(val, str) and "\\n" in val:
+                    cleaned = val.replace("\\n", "\n")
+                    if cleaned != val:
+                        term[lang] = cleaned
+                        needs_update = True
+
+            # difinio and enhavo
+            for field_name in ("difinio", "enhavo"):
+                val = entry.get(field_name, "")
+                if isinstance(val, str) and "\\n" in val:
+                    text_fields[field_name] = val.replace("\\n", "\n")
+                    needs_update = True
+
+            if not needs_update:
+                continue
+
+            updates = {}
+            if needs_update:
                 updates["difinoj"] = json.dumps(dif, ensure_ascii=False)
                 updates["terminologio"] = json.dumps(term, ensure_ascii=False)
                 updates["terminologio_search"] = self._ensure_terminologio_search(term)
