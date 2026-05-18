@@ -87,11 +87,17 @@ def escape_latex_style_backslashes(raw: str) -> str:
                     result.append(next_ch)
                     i += 2
                     continue
-                # Single backslash before non-escape char — LaTeX style
-                if not next_ch.isspace():
-                    result.append("\\\\")
-                    i += 1
+                # TOML line continuation: backslash at end of line
+                if next_ch == "\n":
+                    result.append(ch)
+                    result.append(next_ch)
+                    i += 2
                     continue
+                # Single backslash before any other char — LaTeX style
+                # (includes \space, \t, \n, \alpha, etc.)
+                result.append("\\\\")
+                i += 1
+                continue
         elif in_singleline:
             if ch == quote_char and (i == 0 or raw[i - 1] != "\\"):
                 in_singleline = False
@@ -103,18 +109,19 @@ def escape_latex_style_backslashes(raw: str) -> str:
                 next_ch = raw[i + 1]
                 # Same as multiline: omit n/t to avoid LaTeX command mangling
                 valid_escapes = {'"', "'", "\\"}
-                # Already a valid TOML escape: \\n, \\t, \\", \\', \\\\
+                # Already a valid TOML escape
                 if next_ch in valid_escapes:
                     result.append(ch)
                     result.append(next_ch)
                     i += 2
                     continue
-                # Single backslash followed by non-escape char (e.g.
-                # LaTeX \alpha, \uparrow) — escape it by adding \\.
-                if not next_ch.isspace():
-                    result.append("\\\\")
-                    i += 1
-                    continue
+                # Single backslash before any other char — LaTeX style
+                # (includes \space, \t, \n, \alpha, etc.)
+                # In single-line basic strings, \n is newline but users
+                # should use multiline strings for real newlines.
+                result.append("\\\\")
+                i += 1
+                continue
 
         result.append(ch)
         i += 1
