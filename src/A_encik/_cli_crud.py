@@ -150,7 +150,12 @@ def register_commands(app: typer.Typer) -> None:
 
         if html or open_browser:
             from A_encik.display import preview_entry
-            preview_entry(entry)
+            path = preview_entry(entry)
+            info(tr_multi(
+                f"Aldono HTML: file://{path}",
+                f"HTML preview: file://{path}",
+                f"Aperçu HTML: file://{path}",
+            ))
             return
 
         # Auto-open for KaTeX/images content
@@ -297,7 +302,12 @@ def register_commands(app: typer.Typer) -> None:
         if vidi:
             if html:
                 from A_encik.display import preview_entry
-                preview_entry(updated)
+                path = preview_entry(updated)
+                info(tr_multi(
+                    f"Aldono HTML: file://{path}",
+                    f"HTML preview: file://{path}",
+                    f"Aperçu HTML: file://{path}",
+                ))
             else:
                 display_entry_panel(updated)
 

@@ -66,10 +66,9 @@ def render_entry_html(
     Returns:
         HTML string with rendered markdown fields
     """
-    from A_encik.display_helpers import display_ligilo_items
+    from A_encik.display_helpers import display_ligilo_items, entry_locale_title
 
-    term = entry.get("terminologio") or {}
-    title = next(iter(term.values()), entry.get("uuid", "Unkonata"))
+    title = entry_locale_title(entry) or entry.get("uuid", "Unkonata")
     created = entry.get("kreita_je", "")
     modified = entry.get("modifita_je", "")
 
@@ -240,11 +239,11 @@ def maybe_auto_open_browser(entry: dict[str, Any]) -> bool:
     if not has_non_cli_renderable_markup(entry_body):
         return False
 
-    preview_entry(entry)
+    path = preview_entry(entry)
     info(tr_multi(
-        "HTML antaŭrigardo preta. Malfermu la dosieron en retumilo.",
-        "HTML preview ready. Open the file in a browser.",
-        "Aperçu HTML prêt. Ouvrez le fichier dans un navigateur.",
+        f"HTML antaŭrigardo preta: file://{path}",
+        f"HTML preview ready: file://{path}",
+        f"Aperçu HTML prêt: file://{path}",
     ))
     return True
 
