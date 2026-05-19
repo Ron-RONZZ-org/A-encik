@@ -296,7 +296,6 @@ class TestEncikServiceIntegration:
         
         assert updated["titolo"] == "Updated"
     
-    @pytest.mark.skip(reason="Requires trash table - base CRUDService feature")
     def test_delete_soft(self, service):
         """Test soft delete."""
         data = {"terminologio": {"eo": "DeleteMe"}, "difinio": "Def"}
