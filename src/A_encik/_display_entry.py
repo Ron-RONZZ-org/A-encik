@@ -18,17 +18,38 @@ from A_encik._display_html import (
 
 
 # Fields to display as-is (no markdown rendering)
-PLAIN_FIELDS = ["uuid", "kreita_je", "modifita_je", "forigita_je"]
+PLAIN_FIELDS = {"uuid", "kreita_je", "modifita_je", "forigita_je"}
 
 # Fields already rendered in the header (skip during field iteration).
 # "titolo" here is the dict key populated by row_to_dict from terminologio,
 # not a DB column.
 SKIP_FIELDS = {"titolo"}
 
+# Internal/technical fields never shown to users (ranking, search, etc.)
+INTERNAL_FIELDS = {
+    "_title_prefix", "_frequency", "_compactness",
+    "terminologio_search", "titolo_fold",
+}
+
 # Fields suppressed when a richer alternative exists
 FIELD_SUPPRESSIONS = {
     "difinio": "difinoj",  # Skip singular difinio when plural difinoj is non-empty
 }
+
+# User-facing display order — matches user expectation:
+#   terminologio (title) → difino (definition) → semantika (data) →
+#   ligilo (links) → enhavo → fonto → citajo → datumo
+DISPLAY_FIELD_ORDER = [
+    "terminologio",
+    "difinoj",
+    "difinio",   # only shown if difinoj empty (via FIELD_SUPPRESSIONS)
+    "semantika",
+    "ligilo",
+    "enhavo",
+    "fonto",
+    "citajo",
+    "datumo",
+]
 
 
 def render_entry_html(
@@ -62,55 +83,66 @@ def render_entry_html(
     if modified:
         rows.append(f'<p class="meta">Modifita: {modified[:19]}</p>')
 
-    # --- Semantika: custom string format -> arc/value lines ---
-    sem_raw = entry.get("semantika") or ""
-    if isinstance(sem_raw, str) and sem_raw.strip() and sem_raw != "[]":
-        import re as _re
-        sem_rows: list[str] = []
-        for _s_line in sem_raw.strip().split("\n"):
-            _s_line = _s_line.strip()
-            if not _s_line:
-                continue
-            m = _re.match(
-                r'(str|int|float|bool)\s+(\S+)\s+(?:"([^"]*)"|(\S+))(?:\s+#(\S+))?',
-                _s_line,
-            )
-            if m:
-                _typ, _arc, _qv, _uv, _unit = m.groups()
-                _val = _escape_html(_qv if _qv is not None else _uv)
-                _line = f"<li><code>{_escape_html(_arc)}</code> {_val}</li>"
-                sem_rows.append(_line)
-        if sem_rows:
-            rows.append(f'<div class="field"><label>semantiko</label><div class="field-content"><ul>{"".join(sem_rows)}</ul></div></div>')
+    # Ordered field rendering — follows DISPLAY_FIELD_ORDER for predictable
+    # user-facing arrangement. Special rendering for semantika and ligilo.
+    rendered_keys: set[str] = set()
 
-    # --- Ligilo: show as {tipo} {target entry} ---
-    lig_raw = entry.get("ligilo") or []
-    if isinstance(lig_raw, list):
-        _lig_items = display_ligilo_items(entry)
-        if _lig_items:
-            lig_rows = [
-                f"<li><code>{_escape_html(it['tipo'] or '')}</code> {_escape_html(it.get('titolo', '') or '')}  <span class=\"uuid\">#{_escape_html(it['uuid'][:8])}</span></li>"
-                for it in _lig_items
-            ]
-            rows.append(f'<div class="field"><label>ligilo</label><div class="field-content"><ul>{"".join(lig_rows)}</ul></div></div>')
+    for key in DISPLAY_FIELD_ORDER:
+        rendered_keys.add(key)
 
-    # Render content fields (skip header fields and suppressions)
-    for key, value in entry.items():
-        if key in PLAIN_FIELDS:
+        # Filter by include_fields if specified
+        if include_fields is not None and key not in include_fields:
             continue
-        if key in SKIP_FIELDS:
-            continue
+
+        # -- Suppression: skip singular difinio when difinoj is present --
         if key in FIELD_SUPPRESSIONS:
             richer = FIELD_SUPPRESSIONS[key]
-            if entry.get(richer):  # dict/list — truthy check
+            if entry.get(richer):
                 continue
-        if include_fields and key not in include_fields:
-            continue
-        # Skip ligilo/semantika — already rendered above
-        if key in ("ligilo", "semantika", "ligiloj", "superklaso", "subklaso", "titolo_fold"):
+
+        # -- Semantika: custom string format → arc/value lines --
+        if key == "semantika":
+            sem_raw = entry.get("semantika") or ""
+            if isinstance(sem_raw, str) and sem_raw.strip() and sem_raw != "[]":
+                import re as _re
+                sem_rows: list[str] = []
+                for _s_line in sem_raw.strip().split("\n"):
+                    _s_line = _s_line.strip()
+                    if not _s_line:
+                        continue
+                    m = _re.match(
+                        r'(str|int|float|bool)\s+(\S+)\s+(?:"([^"]*)"|(\S+))(?:\s+#(\S+))?',
+                        _s_line,
+                    )
+                    if m:
+                        _typ, _arc, _qv, _uv, _unit = m.groups()
+                        _val = _escape_html(_qv if _qv is not None else _uv)
+                        _line = f"<li><code>{_escape_html(_arc)}</code> {_val}</li>"
+                        sem_rows.append(_line)
+                if sem_rows:
+                    rows.append(f'<div class="field"><label>semantiko</label><div class="field-content"><ul>{"".join(sem_rows)}</ul></div></div>')
             continue
 
-        # Skip empty string values (e.g. empty enhavo)
+        # -- Ligilo: show as {tipo} {target entry} --
+        if key == "ligilo":
+            lig_raw = entry.get("ligilo") or []
+            if isinstance(lig_raw, list):
+                from A_encik.display_helpers import display_ligilo_items
+                _lig_items = display_ligilo_items(entry)
+                if _lig_items:
+                    lig_rows = [
+                        f"<li><code>{_escape_html(it['tipo'] or '')}</code> {_escape_html(it.get('titolo', '') or '')}  <span class=\"uuid\">#{_escape_html(it['uuid'][:8])}</span></li>"
+                        for it in _lig_items
+                    ]
+                    rows.append(f'<div class="field"><label>ligilo</label><div class="field-content"><ul>{"".join(lig_rows)}</ul></div></div>')
+            continue
+
+        # -- General field rendering --
+        value = entry.get(key)
+        if value is None:
+            continue
+
+        # Skip empty string values
         if isinstance(value, str) and not value:
             continue
 
@@ -121,6 +153,20 @@ def render_entry_html(
         field_html = _render_field(key, value, link_depth=_link_depth)
         if field_html:
             rows.append(f'<div class="field"><label>{key}</label>{field_html}</div>')
+
+    # Fallback: render any unknown keys (from plugins, extensions, etc.)
+    # that are not in any reserved set.
+    _reserved = PLAIN_FIELDS | SKIP_FIELDS | INTERNAL_FIELDS | rendered_keys
+    for key, value in entry.items():
+        if key in _reserved:
+            continue
+        if include_fields is not None and key not in include_fields:
+            continue
+        if isinstance(value, str) and not value:
+            continue
+        field_html = _render_field(key, value, link_depth=_link_depth)
+        if field_html:
+            rows.append(f'<div class="field field-extended"><label>{key}</label>{field_html}</div>')
 
     # Build complete HTML document
     html = f"""<!DOCTYPE html>

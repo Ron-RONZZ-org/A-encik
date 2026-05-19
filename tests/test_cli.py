@@ -432,5 +432,58 @@ class TestDisplayKaTeX:
         assert result is not None
 
 
+class TestDisplayFieldOrder:
+    """Tests for display field ordering and internal field hiding."""
+
+    def test_internal_fields_omitted(self):
+        """Test internal ranking/search fields are hidden from HTML output."""
+        from A_encik.display import render_entry_html
+
+        entry = {
+            "uuid": "abc12345-1234-5678-9abc-def012345678",
+            "terminologio": {"eo": "Fiziko"},
+            "enhavo": "Content",
+            "kreita_je": "2025-01-01T00:00:00",
+            "_title_prefix": 0,
+            "_frequency": 3,
+            "_compactness": 42,
+            "terminologio_search": "fiziko",
+            "titolo_fold": "fiziko",
+        }
+        html = render_entry_html(entry)
+        assert "_title_prefix" not in html
+        assert "_frequency" not in html
+        assert "_compactness" not in html
+        assert "terminologio_search" not in html
+        assert "titolo_fold" not in html
+        # Regular fields should still be present
+        assert "Fiziko" in html
+        assert "Content" in html
+
+    def test_display_field_order(self):
+        """Test fields appear in DISPLAY_FIELD_ORDER."""
+        from A_encik.display import render_entry_html
+
+        entry = {
+            "uuid": "abc12345-1234-5678-9abc-def012345678",
+            "terminologio": {"eo": "Testo"},
+            "difinoj": {"eo": "Difino teksto"},
+            "enhavo": "Enhavo teksto",
+            "fonto": [{"title": "Source"}],
+            "kreita_je": "2025-01-01T00:00:00",
+        }
+        html = render_entry_html(entry)
+
+        # Check field labels appear in expected order
+        term_pos = html.index("terminologio")
+        dif_pos = html.index("difinoj")
+        enh_pos = html.index("enhavo")
+        font_pos = html.index("fonto")
+
+        assert term_pos < dif_pos, "terminologio should come before difinoj"
+        assert dif_pos < enh_pos, "difinoj should come before enhavo"
+        assert enh_pos < font_pos, "enhavo should come before fonto"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
