@@ -240,11 +240,11 @@ def maybe_auto_open_browser(entry: dict[str, Any]) -> bool:
     if not has_non_cli_renderable_markup(entry_body):
         return False
 
-    preview_entry(entry, open_browser=True)
+    preview_entry(entry)
     info(tr_multi(
-        "Malfermis en retumilo por KaTeX/bildoj",
-        "Opened in browser for KaTeX/images",
-        "Ouvert dans le navigateur pour KaTeX/images",
+        "HTML antaŭrigardo preta. Malfermu la dosieron en retumilo.",
+        "HTML preview ready. Open the file in a browser.",
+        "Aperçu HTML prêt. Ouvrez le fichier dans un navigateur.",
     ))
     return True
 
