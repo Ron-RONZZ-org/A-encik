@@ -256,11 +256,6 @@ def register_commands(app: typer.Typer) -> None:
         if vidi:
             if html:
                 from A_encik.display import preview_entry
-                preview_entry(entry, open_browser=True)
-                info(tr_multi(
-                    "Malfermis en retumilo",
-                    "Opened in browser",
-                    "Ouvert dans le navigateur",
-                ))
+                preview_entry(entry)
             else:
                 display_entry_panel(entry)
