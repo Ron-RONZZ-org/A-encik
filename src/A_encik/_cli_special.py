@@ -108,6 +108,13 @@ def register_commands(app: typer.Typer) -> None:
         in existing entries imported with the old buggy parser.
         """
         service = get_service()
+
+        # Rebuild forward links from inline refs FIRST, then scan for reverse links.
+        # Order matters: reconcile_all_computed_fields rebuilds ligilo from scratch,
+        # so it must run before reconcile_all_reverse_links scans ligilo.
+        if cio:
+            rebuilt = service.reconcile_all_computed_fields()
+
         count = service.reconcile_all_reverse_links()
 
         if revert_newlines:

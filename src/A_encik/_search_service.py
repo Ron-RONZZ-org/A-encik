@@ -319,33 +319,87 @@ class SearchMixin:
         return count
 
     def reconcile_all_reverse_links(self) -> int:
-        """Manually reconcile all bidirectional links in the database."""
+        """Rebuild ALL reverse links from every entry's ligilo.
+
+        Iterates all entries, reads their per-entry ligilo (which was rebuilt
+        from inline refs by ``reconcile_all_computed_fields``), and creates
+        reverse links in each target entry. This ensures that when entry A
+        links to entry B (via any link type), B gets a reverse link back to A.
+
+        Returns:
+            Number of reverse links created.
+        """
+        import json
+
         count = 0
         entries = self.list()
+
+        # Build a map: target_uuid → [(source_uuid, tipo)] for all forward links
+        reverse_map: dict[str, list[tuple[str, str | None]]] = {}
         for entry in entries:
-            entry_uuid = entry.get("uuid")
+            source_uuid = entry.get("uuid", "")
+            if not source_uuid:
+                continue
+
+            # Collect all links from ligilo
+            ligilo = entry.get("ligilo") or []
+            if isinstance(ligilo, str):
+                try:
+                    ligilo = json.loads(ligilo)
+                except (json.JSONDecodeError, ValueError):
+                    ligilo = []
+
+            for link in (ligilo or []):
+                target_uuid = link[0] if isinstance(link, list) else link
+                tipo = str(link[1]) if isinstance(link, list) and len(link) >= 2 else None
+                if not target_uuid:
+                    continue
+                reverse_map.setdefault(target_uuid, []).append((source_uuid, tipo))
+
+            # Also handle superklaso as rdfs:subClassOf links
             superklaso = entry.get("superklaso", [])
             if isinstance(superklaso, str):
                 superklaso = [superklaso]
             for parent_uuid in superklaso:
                 if not parent_uuid:
                     continue
-                parent = self.get(parent_uuid)
-                if not parent:
+                reverse_map.setdefault(parent_uuid, []).append((source_uuid, "rdfs:subClassOf"))
+
+        # For each target entry, ensure reverse links exist
+        for target_uuid, sources in reverse_map.items():
+            target = self.get(target_uuid)
+            if not target:
+                continue
+
+            existing_ligilo = target.get("ligilo") or []
+            if isinstance(existing_ligilo, str):
+                try:
+                    existing_ligilo = json.loads(existing_ligilo)
+                except (json.JSONDecodeError, ValueError):
+                    existing_ligilo = []
+            existing_uuids = {
+                (link[0] if isinstance(link, list) else link).lower()
+                for link in (existing_ligilo or [])
+            }
+
+            new_links = 0
+            for source_uuid, tipo in sources:
+                if source_uuid.lower() in existing_uuids:
                     continue
-                ligilo = parent.get("ligilo", [])
-                if isinstance(ligilo, str):
-                    ligilo = [ligilo]
-                needs_add = True
-                for link in ligilo:
-                    link_uuid = link if isinstance(link, str) else link[0]
-                    if link_uuid == entry_uuid:
-                        needs_add = False
-                        break
-                if needs_add:
-                    new_ligilo = ligilo + [[entry_uuid, "rdfs:hasSubClass"]]
-                    self.update(parent_uuid, {"ligilo": new_ligilo})
-                    count += 1
+                reverse_tipo = self._reverse_tipo(tipo)
+                existing_ligilo.append([source_uuid, reverse_tipo])
+                new_links += 1
+
+            if new_links > 0:
+                self.db.execute(
+                    "UPDATE encik SET ligilo = ? WHERE uuid = ?",
+                    (
+                        json.dumps(existing_ligilo, ensure_ascii=False),
+                        target["uuid"],
+                    ),
+                )
+                count += new_links
+
         return count
 
     def fix_latex_escapes(self) -> int:
