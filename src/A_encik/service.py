@@ -221,9 +221,16 @@ class EncikService(SearchMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMi
     def _post_update(
         self, uuid: str, old_data: dict[str, Any] | None, new_data: dict[str, Any]
     ) -> None:
-        """Hook called after update — sync bidirectional links."""
+        """Hook called after update — sync bidirectional links.
+
+        Compares old vs new ligilo (post ``_sync_links``) and adds/removes
+        reverse links in target entries accordingly.
+        """
+        entry = self.get(uuid)
+        if not entry:
+            return
         old_ligilo = (old_data or {}).get("ligilo", [])
-        self._sync_bidirectional_relations(new_data, previous_ligilo=old_ligilo)
+        self._sync_bidirectional_relations(entry, previous_ligilo=old_ligilo)
 
     def _post_delete(self, uuid: str, data: dict[str, Any] | None, soft: bool) -> None:
         """Hook called after delete — remove stale reverse links."""

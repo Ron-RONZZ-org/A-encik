@@ -328,5 +328,52 @@ class TestEncikServiceIntegration:
         assert count_after == count_before + 1
 
 
+class TestBidirectionalLinks:
+    """Tests for bidirectional link syncing on update."""
+
+    @pytest.fixture
+    def service(self, tmp_path):
+        """Create service with test DB."""
+        import A_encik.data.storage as storage_module
+        from A_encik.service import EncikService
+        from unittest.mock import patch
+
+        with patch.object(storage_module, "_DATA_DIR", tmp_path):
+            with patch.object(storage_module, "_DB_FILE", tmp_path / "encik.db"):
+                with patch.object(storage_module, "_ensure_dirs", lambda: None):
+                    with patch("A.core.paths.data_dir", return_value=tmp_path):
+                        with patch("A.data.base.data_dir", return_value=tmp_path):
+                            from A_encik.data.storage import get_db
+                            db = get_db()
+                            # Reset singleton
+                            import A_encik.service as svc_module
+                            svc_module._encik_service = None
+                            yield EncikService(db)
+
+    def test_reverse_link_added_on_update(self, service):
+        """Test adding a ligilo entry creates a reverse link in the target."""
+        a = service.create({"terminologio": {"eo": "Entry A"}, "difinio": "Def A"})
+        b = service.create({"terminologio": {"eo": "Entry B"}, "difinio": "Def B"})
+
+        service.update(a["uuid"], {"ligilo": [[b["uuid"], "wdt:P123"]]})
+
+        b_updated = service.get(b["uuid"])
+        ligilo = b_updated.get("ligilo", [])
+        assert any(link[0] == a["uuid"] for link in ligilo)
+
+    def test_stale_reverse_link_removed_on_update(self, service):
+        """Test removing a ligilo entry cleans up the stale reverse link."""
+        a = service.create({"terminologio": {"eo": "Entry A"}, "difinio": "Def A"})
+        b = service.create({"terminologio": {"eo": "Entry B"}, "difinio": "Def B"})
+
+        service.update(a["uuid"], {"ligilo": [[b["uuid"], "wdt:P123"]]})
+        b_after_add = service.get(b["uuid"])
+        assert any(link[0] == a["uuid"] for link in b_after_add.get("ligilo", []))
+
+        service.update(a["uuid"], {"ligilo": []})
+        b_after_remove = service.get(b["uuid"])
+        assert not any(link[0] == a["uuid"] for link in b_after_remove.get("ligilo", []))
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
