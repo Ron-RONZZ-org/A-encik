@@ -95,7 +95,11 @@ def register_commands(app: typer.Typer) -> None:
     def vidi(
         ref: str = typer.Argument(
             ...,
-            help=tr_multi("UUID aŭ titolo", "UUID or title", "UUID ou titre"),
+            help=tr_multi(
+                "UUID, titolo, aŭ .enc dosiero por antaŭrigardo",
+                "UUID, title, or .enc file for preview",
+                "UUID, titre, ou fichier .enc pour prévisualisation",
+            ),
         ),
         lingvo: Optional[str] = typer.Option(
             None,
