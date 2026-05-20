@@ -76,12 +76,16 @@ def escape_latex_style_backslashes(raw: str) -> str:
             # Inside multiline string: escape backslashes not already escaped
             if ch == "\\" and i + 1 < len(raw):
                 next_ch = raw[i + 1]
-                # Only keep quote- and backslash-escapes as valid TOML escapes.
-                # DO NOT include n or t — they conflict with LaTeX commands like
-                # \theta, \newcommand, \tau, \times, \to, etc. TOML interprets
-                # \n as newline and \t as tab, mangling LaTeX content.
-                valid_escapes = {'"', "'", "\\"}
-                # Already a valid TOML escape
+                # Only keep quote-escapes as valid TOML escapes.
+                # DO NOT include backslash — \\ is ambiguous: TOML treats it
+                # as escaped backslash (\\) → \, but LaTeX needs \\ for line
+                # breaks. We handle \\ differently based on the next char:
+                #   \\ + letter → keep as TOML escape (e.g. \begin → \begin)
+                #   \\ + space  → quadruple to preserve both backslashes
+                #                 (e.g. \\ v → \\\\ v → TOML → \\ v ✓)
+                #   \\ + " or ' → already handled below
+                valid_escapes = {'"', "'"}
+                # Already a valid TOML escape (quote)
                 if next_ch in valid_escapes:
                     result.append(ch)
                     result.append(next_ch)
@@ -93,8 +97,20 @@ def escape_latex_style_backslashes(raw: str) -> str:
                     result.append(next_ch)
                     i += 2
                     continue
+                # LaTeX line break: \\ followed by space
+                if next_ch == "\\" and i + 2 < len(raw) and raw[i + 2] == " ":
+                    # Quadruple to \\\\ → TOML produces \\
+                    result.append("\\\\\\\\")
+                    i += 2
+                    continue
+                # LaTeX command: \\ followed by letter → keep as valid escape
+                # (e.g. \\begin → TOML \\ → \, then "begin")
+                if next_ch == "\\":
+                    result.append(ch)
+                    result.append(next_ch)
+                    i += 2
+                    continue
                 # Single backslash before any other char — LaTeX style
-                # (includes \space, \t, \n, \alpha, etc.)
                 result.append("\\\\")
                 i += 1
                 continue
@@ -107,18 +123,25 @@ def escape_latex_style_backslashes(raw: str) -> str:
                 continue
             if ch == "\\" and i + 1 < len(raw):
                 next_ch = raw[i + 1]
-                # Same as multiline: omit n/t to avoid LaTeX command mangling
-                valid_escapes = {'"', "'", "\\"}
-                # Already a valid TOML escape
+                # Same logic as multiline: handle \\ + space specially
+                valid_escapes = {'"', "'"}
                 if next_ch in valid_escapes:
                     result.append(ch)
                     result.append(next_ch)
                     i += 2
                     continue
+                # LaTeX line break: \\ followed by space
+                if next_ch == "\\" and i + 2 < len(raw) and raw[i + 2] == " ":
+                    result.append("\\\\\\\\")
+                    i += 2
+                    continue
+                # LaTeX command: \\ followed by letter → keep as escape
+                if next_ch == "\\":
+                    result.append(ch)
+                    result.append(next_ch)
+                    i += 2
+                    continue
                 # Single backslash before any other char — LaTeX style
-                # (includes \space, \t, \n, \alpha, etc.)
-                # In single-line basic strings, \n is newline but users
-                # should use multiline strings for real newlines.
                 result.append("\\\\")
                 i += 1
                 continue
