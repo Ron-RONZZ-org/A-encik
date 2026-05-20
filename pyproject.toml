@@ -52,7 +52,7 @@ ruff = "^0.4.0"
 testpaths = ["tests"]
 
 [tool.uv.sources]
-a-core = { path = "../A-core" }
+a-core = { path = "../A-core", editable = true }
 
 [dependency-groups]
 dev = [
