@@ -9,9 +9,10 @@ import typer
 from rich.table import Table
 from rich.box import SIMPLE as BOX_SIMPLE
 
-from A import error, info, copy_to_clipboard
+from A import error, info, warning, copy_to_clipboard
 from A.console import console
 from A import tr_multi
+from rich.panel import Panel
 
 from A_encik.service import get_service
 from A_encik.display_helpers import (
@@ -133,8 +134,62 @@ def register_commands(app: typer.Typer) -> None:
             help=tr_multi("Kopii [terminologio.uzantLingvo](#uuid) al tondujo", "Copy [title in user language](#uuid) to clipboard", "Copier [titre dans la langue de l'utilisateur](#uuid) dans le presse-papier"),
         ),
     ) -> None:
-        """View a knowledge entry."""
+        """View a knowledge entry (or preview a .enc file before addition)."""
         service = get_service()
+
+        # File preview mode: if ref is a .enc file, parse and display without DB
+        ref_path = Path(ref).expanduser().resolve()
+        if ref_path.suffix == ".enc" and ref_path.exists():
+            from A_encik.enc_format import parse_enc_file, validate_enc_entry
+
+            try:
+                parsed = parse_enc_file(ref_path)
+            except ValueError as exc:
+                error(str(exc))
+                raise typer.Exit(1)
+            errors = validate_enc_entry(parsed)
+            if errors:
+                for e in errors:
+                    error(f"Validiga eraro: {e}")
+                raise typer.Exit(1)
+
+            if kopii or semantika_kopii:
+                warning(tr_multi(
+                    "Antaŭrigardo ne havas UUID-on — tondujo ne uzeblas",
+                    "Preview has no UUID — clipboard not available",
+                    "L'aperçu n'a pas d'UUID — presse-papier non disponible",
+                ))
+                kopii = False
+                semantika_kopii = False
+
+            if html or open_browser:
+                from A_encik.display import preview_entry
+                path = preview_entry(parsed)
+                info(tr_multi(
+                    f"Aldono HTML: file://{path}",
+                    f"HTML preview: file://{path}",
+                    f"Aperçu HTML: file://{path}",
+                ))
+                return
+
+            from A_encik.display_helpers import entry_locale_title as _elt
+            title = _elt(parsed) or ref_path.stem
+            lines: list[str] = []
+            lines.append(f"  [dim]{'stato:':<14}[/dim] [italic]antaŭrigardo[/italic]")
+            lines.append(f"  [dim]{'fonto:':<14}[/dim] {ref_path}")
+            # Show terminologio as inline summary
+            term = parsed.get("terminologio") or {}
+            if term:
+                term_str = " | ".join(f"{k}: {v}" for k, v in term.items() if v)
+                lines.append(f"  [dim]{'terminologio:':<14}[/dim] {term_str}")
+            dif = parsed.get("difinoj") or parsed.get("difinio") or ""
+            if dif:
+                if isinstance(dif, dict):
+                    dif = next(iter(dif.values()), "")
+                first_line = str(dif).strip().split("\n")[0][:80]
+                lines.append(f"  [dim]{'difino:':<14}[/dim] {first_line}")
+            console.print(Panel("\n".join(lines), title=f"[bold]{title}[/bold]", expand=False))
+            return
 
         entry = service.get(ref)
         if not entry:
