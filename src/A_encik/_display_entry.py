@@ -201,18 +201,23 @@ def preview_entry(
 ) -> Path:
     """Render and preview an entry in browser.
 
+    The browser tab title comes from ``preview_html`` → ``_generate_html_wrapper``
+    which wraps the HTML in a full page with its own ``<title>``.
+    Must be locale-aware or the browser tab will show the wrong language.
+
     Args:
         entry: The entry dictionary
         open_browser: If True, open in browser
-        title: Optional title override
+        title: Optional title override (locale-aware)
 
     Returns:
         Path to the rendered HTML file
     """
+    from A_encik.display_helpers import entry_locale_title as _elt
+
     html = render_entry_html(entry, _link_depth=0)
     if not title:
-        _pt = entry.get("terminologio") or {}
-        title = next(iter(_pt.values()), "encik")
+        title = _elt(entry) or "encik"
     return preview_html(html, open_browser=open_browser, title=title)
 
 
