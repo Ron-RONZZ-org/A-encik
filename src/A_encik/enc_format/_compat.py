@@ -190,38 +190,128 @@ def fix_inline_table_commas(text: str) -> str:
 
 
 def fix_unquoted_uuids(text: str) -> str:
-    """Quote bare UUIDs in TOML array values.
+    """Quote bare words in TOML array values.
 
-    Legacy autish allowed: ``ligilo = [uuid1, uuid2]``
-    But TOML requires quoted strings: ``ligilo = ["uuid1", "uuid2"]``
+    Legacy autish allowed unquoted values in arrays::
+
+        ligilo = [uuid1, uuid2]
+        ligilo = [uuid, tipo:type]
+
+    But TOML requires quoted strings for non-numeric values::
+
+        ligilo = ["uuid1", "uuid2"]
+        ligilo = ["uuid", "tipo:type"]
+
+    Numbers (``42``, ``3.14``, ``0xDEAD``), booleans (``true``/``false``),
+    and special floats (``inf``/``nan``) are left unquoted.
+
+    Only fixes bare words inside ``[...]`` arrays, NOT inside ``{...}``
+    inline tables (where bare words are valid TOML keys) and NOT inside
+    quoted TOML strings.
     """
-    result = []
+    _TOML_BARE_LITERAL = re.compile(
+        r"^[+-]?(?:\d+\.?\d*"
+        r"|0x[0-9a-fA-F]+"
+        r"|0o[0-7]+"
+        r"|0b[01]+"
+        r")(?:[eE][+-]?\d+)?$"
+    )
+    _TOML_BOOL = re.compile(r"^(?:true|false)$", re.IGNORECASE)
+    _TOML_SPECIAL = re.compile(r"^(?:inf|nan)$", re.IGNORECASE)
+
+    result: list[str] = []
     i = 0
+    stack: list[str] = []  # '[' = inside array, '{' = inside inline table
+    # TOML string-state tracking — skip content inside quotes
+    in_str: str | None = None  # None / '"' / "'"
+    in_multiline: str | None = None  # None / '"""' / "'''"
+
     while i < len(text):
         ch = text[i]
-        # Look for bare hex strings inside arrays
-        if ch in ("[", ","):
+
+        # ── TOML string-state tracking ────────────────────────────────
+        if in_multiline:
             result.append(ch)
             i += 1
-            # Skip whitespace
+            if text[i - 3 : i] == in_multiline:
+                in_multiline = None
+                in_str = None
+            continue
+        if in_str:
+            result.append(ch)
+            i += 1
+            if ch == "\\" and i < len(text):
+                # Skip escaped character
+                result.append(text[i])
+                i += 1
+            elif ch == in_str:
+                in_str = None
+            continue
+        if ch in ('"', "'"):
+            if text[i : i + 3] in ('"""', "'''"):
+                in_multiline = text[i : i + 3]
+                in_str = ch
+            else:
+                in_str = ch
+            result.append(ch)
+            i += 1
+            continue
+
+        # ── Inline-table (de)activation ───────────────────────────────
+        if ch == "{":
+            stack.append("{")
+            result.append(ch)
+            i += 1
+            continue
+        if ch == "}":
+            if stack:
+                stack.pop()
+            result.append(ch)
+            i += 1
+            continue
+
+        in_array = bool(stack) and stack[-1] == "["
+
+        # ── Array closing ─────────────────────────────────────────────
+        if ch == "]":
+            if stack:
+                stack.pop()
+            result.append(ch)
+            i += 1
+            continue
+
+        # ── Inside or opening an array ────────────────────────────────
+        if ch == "[" or (in_array and ch == ","):
+            result.append(ch)
+            i += 1
+            if ch == "[":
+                stack.append("[")
+            # Skip whitespace after '[' or ','
             while i < len(text) and text[i] in " \t":
                 result.append(text[i])
                 i += 1
-            # Check if next is a bare UUID (hex string without quotes)
-            if i < len(text) and re.match(
-                r"^[0-9a-fA-F]{8,}(?:\s*[,\}\]])",
-                text[i:],
+            # Quote bare word that is not a valid TOML literal
+            if i < len(text) and text[i] not in (
+                '"', "'", "{", "}", "]", ",", "["
             ):
-                # Extract the UUID
-                match = re.match(r"([0-9a-fA-F]{8,})", text[i:])
-                if match:
-                    uuid_val = match.group(1)
-                    result.append(f'"{uuid_val}"')
-                    i += len(uuid_val)
+                m = re.match(r"^[a-zA-Z0-9_:.\-]+", text[i:])
+                if m:
+                    word = m.group()
+                    if not (
+                        _TOML_BARE_LITERAL.match(word)
+                        or _TOML_BOOL.match(word)
+                        or _TOML_SPECIAL.match(word)
+                    ):
+                        result.append(f'"{word}"')
+                        i += len(word)
+                        continue
+                    result.append(word)
+                    i += len(word)
                     continue
         else:
             result.append(ch)
             i += 1
+
     return "".join(result)
 
 

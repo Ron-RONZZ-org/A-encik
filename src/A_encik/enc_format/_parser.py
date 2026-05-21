@@ -199,6 +199,50 @@ def _normalize_lingvo_codes(raw: str, field: str = "") -> list[str]:
     return valid
 
 
+def _looks_like_uuid(s: str) -> bool:
+    """Check if a string looks like a UUID (8+ hex chars with optional hyphens/dots)."""
+    cleaned = s.lstrip("#").replace("-", "").replace(".", "")
+    return bool(re.fullmatch(r"[0-9a-fA-F]{8,}", cleaned))
+
+
+def _normalise_ligilo_flat_list(raw: list) -> list:
+    """Convert flat ``[uuid, tipo, uuid, tipo]`` to ``[[uuid, tipo], [uuid, tipo]]``.
+
+    Legacy .enc files sometimes store ligilo as a flat list where
+    non-UUID strings are interpreted as the semantic type of the
+    preceding UUID. This function detects and converts that format.
+
+    Examples::
+
+        [\"15ab7b6c\", \"owl:disjointWith\"]           → [[\"15ab7b6c\", \"owl:disjointWith\"]]
+        [\"abc123\", \"def456\"]                       → [[\"abc123\"], [\"def456\"]]
+        [[\"uuid1\", \"rdf:type\"], [\"uuid2\"]]      → unchanged (already nested)
+    """
+    # Already nested — nothing to do
+    if any(isinstance(item, list) for item in raw):
+        return raw
+
+    result: list[list[str]] = []
+    current_uuid: str | None = None
+    for item in raw:
+        s = str(item).strip()
+        if _looks_like_uuid(s):
+            if current_uuid is not None:
+                result.append([current_uuid])
+            current_uuid = s
+        else:
+            # Non-UUID string with preceding UUID → pair as [uuid, tipo]
+            if current_uuid is not None:
+                result.append([current_uuid, s])
+                current_uuid = None
+            else:
+                # Orphaned tipo with no preceding UUID → treat as bare link
+                result.append([s])
+    if current_uuid is not None:
+        result.append([current_uuid])
+    return result
+
+
 def parse_enc_file(path: Path) -> dict[str, Any]:
     """Parse an .enc file and return a dict with the entry fields.
 
@@ -307,7 +351,7 @@ def parse_enc_file(path: Path) -> dict[str, Any]:
     if isinstance(raw_ligilo, str):
         raw_ligilo = [raw_ligilo]
     if raw_ligilo:
-        entry["ligilo"] = raw_ligilo
+        entry["ligilo"] = _normalise_ligilo_flat_list(raw_ligilo)
 
     # fonto
     raw_fonto = data.get("fonto", data.get("source", []))
