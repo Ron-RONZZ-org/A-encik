@@ -42,12 +42,39 @@ def register_commands(app: typer.Typer) -> None:
         dosiero: Optional[str] = typer.Argument(
             None,
             help=tr_multi(
-                "Vojo al .enc dosiero. Ligilo ekz: ligilo = [[\"uuid\", \"tipo\"]] "
-                "aŭ ligilo = [\"uuid1\", \"uuid2\"]",
-                "Path to .enc file. ligilo format: ligilo = [[\"uuid\", \"tipo\"]] "
-                "or ligilo = [\"uuid1\", \"uuid2\"]",
-                "Chemin vers fichier .enc. Format ligilo : "
-                "ligilo = [[\"uuid\", \"tipo\"]] ou ligilo = [\"uuid1\", \"uuid2\"]",
+                "Vojo al .enc dosiero. "
+                "Plena ekzemplo: # Titolo | "
+                'terminologio.eo = "Term" | '
+                'difino.eo = "Priskribo" | '
+                'enhavo = """...""" | '
+                'superklaso = ["uuid"] | '
+                'ligilo = [["uuid", "tipo"]] | '
+                'fonto = [{titolo="Libro", jaro=2024}] | '
+                'citajo = [{teksto="Citaĵo"}] | '
+                'datumo.x = """...""" | '
+                'semantika = """int x 42"""',
+                "Path to .enc file. "
+                "Full example: # Title | "
+                'terminologio.eo = "Term" | '
+                'difino.eo = "Description" | '
+                'enhavo = """...""" | '
+                'superklaso = ["uuid"] | '
+                'ligilo = [["uuid", "tipo"]] | '
+                'fonto = [{titolo="Book", jaro=2024}] | '
+                'citajo = [{teksto="Quote"}] | '
+                'datumo.x = """...""" | '
+                'semantika = """int x 42"""',
+                "Chemin vers fichier .enc. "
+                "Exemple complet : # Titre | "
+                'terminologio.eo = "Term" | '
+                'difino.eo = "Description" | '
+                'enhavo = """...""" | '
+                'superklaso = ["uuid"] | '
+                'ligilo = [["uuid", "tipo"]] | '
+                'fonto = [{titolo="Livre", jaro=2024}] | '
+                'citajo = [{teksto="Citation"}] | '
+                'datumo.x = """...""" | '
+                'semantika = """int x 42"""',
             ),
         ),
         jaro: Optional[int] = typer.Option(
