@@ -130,7 +130,7 @@ def render_entry_html(
                 _lig_items = display_ligilo_items(entry)
                 if _lig_items:
                     lig_rows = [
-                        f"<li><code>{_escape_html(it['tipo'] or '')}</code> {_escape_html(it.get('titolo', '') or '')}  <span class=\"uuid\">#{_escape_html(it['uuid'][:8])}</span></li>"
+                        f"<li><span class=\"tipo\">{_escape_html(it['tipo'] or '')}</span> {_escape_html(it.get('titolo', '') or '')}  <span class=\"uuid\">#{_escape_html(it['uuid'][:8])}</span></li>"
                         for it in _lig_items
                     ]
                     rows.append(f'<div class="field"><label>ligilo</label><div class="field-content"><ul>{"".join(lig_rows)}</ul></div></div>')
@@ -184,6 +184,8 @@ def render_entry_html(
         .field-content {{ padding: 10px; background: #f9f9f9; border-radius: 5px; }}
         pre {{ background: #eee; padding: 10px; overflow-x: auto; }}
         code {{ background: #eee; padding: 2px 5px; }}
+        .tipo {{ color: #888; font-size: 0.85em; }}
+        .uuid {{ color: #aaa; font-size: 0.8em; }}
     </style>
 </head>
 <body>

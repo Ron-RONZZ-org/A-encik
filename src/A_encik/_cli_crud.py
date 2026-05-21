@@ -176,6 +176,24 @@ def register_commands(app: typer.Typer) -> None:
                 ))
                 return
 
+            # Auto-switch to HTML if content has KaTeX/images (not CLI-renderable)
+            from A_encik.display_helpers import has_non_cli_renderable_markup
+            entry_body = " ".join(
+                filter(None, [
+                    parsed.get("difinio", "") or "",
+                    *((parsed.get("difinoj") or {}).values()),
+                ])
+            )
+            if has_non_cli_renderable_markup(entry_body):
+                from A_encik.display import preview_entry
+                path = preview_entry(parsed)
+                info(tr_multi(
+                    f"HTML antaŭrigardo (enhavas matematikon/bildojn): file://{path}",
+                    f"HTML preview (contains math/images): file://{path}",
+                    f"Aperçu HTML (contient maths/images) : file://{path}",
+                ))
+                return
+
             from A_encik.display_helpers import entry_locale_title as _elt
             title = _elt(parsed) or ref_path.stem
             lines: list[str] = []
