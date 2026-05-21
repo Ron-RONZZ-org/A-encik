@@ -258,12 +258,23 @@ class SearchMixin:
         ``terminologio_search`` from the current ``terminologio``.
         Then persists both back to the database.
 
+        Also repairs a known corruption from a previous version of
+        ``fix_unquoted_uuids`` that inserted double quotes inside
+        markdown link labels (``["word"](#uuid)`` instead of
+        ``[word](#uuid)``).
+
         This is the bulk fix for entries that were imported with older
         code that didn't properly sync inline links or search data.
 
         Returns:
             Number of entries updated.
         """
+        # Regex to fix corrupted quotes inside markdown link labels.
+        # Old bug: fix_unquoted_uuids turned [word](#uuid) into ["word"](#uuid)
+        _FIX_QUOTED_LABEL = re.compile(
+            r'\["([^"]+)"([^\]]*)\]\(#',
+        )
+
         rows = self.db.execute("SELECT * FROM encik")
         count = 0
         for row in rows:
@@ -272,18 +283,41 @@ class SearchMixin:
             if not entry_uuid:
                 continue
 
-            # Recompute terminologio_search
-            term = entry.get("terminologio") or {}
-            ts = self._ensure_terminologio_search(term)
-            updates: dict[str, Any] = {"terminologio_search": ts}
+            updates: dict[str, Any] = {}
 
-            # Rebuild ligilo from inline refs
+            # Repair corrupted quotes in text fields + rebuild ligilo
             text_fields: dict[str, Any] = {
                 "difinoj": entry.get("difinoj") or {},
                 "enhavo": entry.get("enhavo") or "",
             }
             if entry.get("difinio"):
                 text_fields["difinio"] = entry["difinio"]
+
+            for field_name in ("difinoj", "difinio", "enhavo"):
+                raw = text_fields.get(field_name)
+                if not raw:
+                    continue
+                if isinstance(raw, dict):
+                    repaired: dict[str, str] = {}
+                    for lang, text in raw.items():
+                        if isinstance(text, str) and _FIX_QUOTED_LABEL.search(text):
+                            repaired[lang] = _FIX_QUOTED_LABEL.sub(
+                                r"[\1\2](#", text,
+                            )
+                        else:
+                            repaired[lang] = text
+                    if repaired != raw:
+                        text_fields[field_name] = repaired
+                        updates[field_name] = json.dumps(repaired, ensure_ascii=False)
+                elif isinstance(raw, str) and _FIX_QUOTED_LABEL.search(raw):
+                    fixed = _FIX_QUOTED_LABEL.sub(r"[\1\2](#", raw)
+                    text_fields[field_name] = fixed
+                    updates[field_name] = fixed
+
+            # Recompute terminologio_search
+            term = entry.get("terminologio") or {}
+            ts = self._ensure_terminologio_search(term)
+            updates["terminologio_search"] = ts
 
             _INLINE_LINK_RE = re.compile(
                 r'\[([^\]]*)\]\(#([0-9a-f-]+)\s*(?:,\s*([^)]+))?\)',
