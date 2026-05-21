@@ -113,7 +113,6 @@ def entry_to_enc(entry: dict[str, Any]) -> str:
     citajo = entry.get("citajo") or []
     datumo = entry.get("datumo") or {}
     semantika = entry.get("semantika") or []
-    enhavo = entry.get("enhavo", "")
 
     parts: list[str] = []
 
@@ -141,13 +140,6 @@ def entry_to_enc(entry: dict[str, Any]) -> str:
     dif_lines = _lang_map_lines("difino", difinoj)
     if dif_lines:
         parts.append(dif_lines)
-        parts.append("")
-
-    # enhavo
-    if enhavo:
-        parts.append('"""')
-        parts.append(enhavo)
-        parts.append('"""')
         parts.append("")
 
     # superklaso

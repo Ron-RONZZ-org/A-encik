@@ -22,7 +22,6 @@ from A_encik.enc_format._compat import (
 VALID_ENC_KEYS = frozenset({
     "titolo", "difinio", "difino", "difinoj",
     "terminologio",
-    "enhavo",
     "superklaso",
     "ligilo",
     "fonto", "source",
@@ -180,8 +179,9 @@ def _normalise_fonto_tipo(raw_tipo: str) -> str:
 def _normalise_superklaso_refs(raw: Any) -> list[str]:
     """Normalise superklaso references to a list of UUID strings.
 
-    Strips leading ``#`` from any reference (some .enc files store
-    them with the autish-legacy ``#`` prefix convention).
+    Accepts only bare UUID strings (with optional ``#`` prefix).
+    The ``[title, UUID]`` pair format is no longer supported — UUID
+    is the unique identifier.
     """
     def _clean(val: str) -> str:
         return val.strip().lstrip("#")
@@ -193,9 +193,7 @@ def _normalise_superklaso_refs(raw: Any) -> list[str]:
         for item in raw:
             if isinstance(item, str):
                 result.append(_clean(item))
-            elif isinstance(item, list) and len(item) >= 2:
-                # [title, UUID] pair — take the UUID
-                result.append(_clean(str(item[1])))
+            # [title, UUID] pair skipped — UUID is the identifier
         return result
     return []
 
@@ -308,9 +306,22 @@ def parse_enc_file(path: Path) -> dict[str, Any]:
         else:
             raise ValueError(_format_enc_parse_error(raw_core, exc)) from exc
 
+    # Pop enhavo before key validation (deprecated — merged into difinoj)
+    raw_enhavo = data.pop("enhavo", enhavo)
+    if isinstance(raw_enhavo, str) and raw_enhavo.strip():
+        enhavo = raw_enhavo
+
     _validate_enc_keys(data)
 
     terminologio, difinoj = _collect_lang_fields(data)
+
+    # ── enhavo merged into difinoj (no longer a separate field) ──
+    if enhavo and isinstance(enhavo, str) and enhavo.strip():
+        if difinoj:
+            first_lang = next(iter(difinoj))
+            difinoj[first_lang] = difinoj[first_lang] + "\n\n" + enhavo
+        else:
+            difinoj["eo"] = enhavo
 
     # Fallback: use title from comment if no terminologio
     if not terminologio and title_from_comment:
@@ -345,11 +356,6 @@ def parse_enc_file(path: Path) -> dict[str, Any]:
     }
     if difinio:
         entry["difinio"] = difinio
-
-    # enhavo
-    entry_enhavo = data.get("enhavo", enhavo)
-    if isinstance(entry_enhavo, str) and entry_enhavo.strip():
-        entry["enhavo"] = entry_enhavo
 
     # superklaso
     superklaso = _normalise_superklaso_refs(data.get("superklaso", []))

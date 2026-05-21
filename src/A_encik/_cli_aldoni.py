@@ -46,7 +46,6 @@ def register_commands(app: typer.Typer) -> None:
                 "Plena ekzemplo: # Titolo | "
                 'terminologio.eo = "Term" | '
                 'difino.eo = "Priskribo" | '
-                'enhavo = """...""" | '
                 'superklaso = ["uuid"] | '
                 'ligilo = [["uuid", "tipo"]] | '
                 'fonto = [{titolo="Libro", jaro=2024}] | '
@@ -57,7 +56,6 @@ def register_commands(app: typer.Typer) -> None:
                 "Full example: # Title | "
                 'terminologio.eo = "Term" | '
                 'difino.eo = "Description" | '
-                'enhavo = """...""" | '
                 'superklaso = ["uuid"] | '
                 'ligilo = [["uuid", "tipo"]] | '
                 'fonto = [{titolo="Book", jaro=2024}] | '
@@ -68,7 +66,6 @@ def register_commands(app: typer.Typer) -> None:
                 "Exemple complet : # Titre | "
                 'terminologio.eo = "Term" | '
                 'difino.eo = "Description" | '
-                'enhavo = """...""" | '
                 'superklaso = ["uuid"] | '
                 'ligilo = [["uuid", "tipo"]] | '
                 'fonto = [{titolo="Livre", jaro=2024}] | '

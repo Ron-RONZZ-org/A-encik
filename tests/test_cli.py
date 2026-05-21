@@ -477,12 +477,10 @@ class TestDisplayFieldOrder:
         # Check field labels appear in expected order
         term_pos = html.index("terminologio")
         dif_pos = html.index("difinoj")
-        enh_pos = html.index("enhavo")
         font_pos = html.index("fonto")
 
         assert term_pos < dif_pos, "terminologio should come before difinoj"
-        assert dif_pos < enh_pos, "difinoj should come before enhavo"
-        assert enh_pos < font_pos, "enhavo should come before fonto"
+        assert dif_pos < font_pos, "difinoj should come before fonto"
 
 
 if __name__ == "__main__":

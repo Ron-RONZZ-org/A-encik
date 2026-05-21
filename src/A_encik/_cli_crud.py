@@ -240,11 +240,11 @@ def register_commands(app: typer.Typer) -> None:
             None,
             help=tr_multi(
                 ".enc dosiero por rekta anstataŭigo. "
-                "Ligilo ekz: ligilo = [[\"uuid\", \"tipo\"]]",
+                "Plena ekzemplo: encik modifi <uuid> <dosiero.enc>",
                 ".enc file for full replacement. "
-                "ligilo format: ligilo = [[\"uuid\", \"tipo\"]]",
+                "Full example: encik modifi <uuid> <file.enc>",
                 "Fichier .enc pour remplacement complet. "
-                "Format ligilo : ligilo = [[\"uuid\", \"tipo\"]]",
+                "Exemple complet : encik modifi <uuid> <fichier.enc>",
             ),
         ),
         kopii: bool = typer.Option(

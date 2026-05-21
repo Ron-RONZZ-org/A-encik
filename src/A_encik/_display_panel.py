@@ -61,14 +61,6 @@ def display_entry_panel(
         for lang, term_def in sorted(difinoj.items()):
             lines.append(f"    {lang}: {render_markdown_text(term_def)}")
 
-    enhavo = (entry.get("enhavo") or "").strip()
-    if enhavo and cxio:
-        lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
-        for ln in enhavo.splitlines():
-            ln_stripped = ln.strip()
-            if ln_stripped:
-                lines.append(f"    {render_markdown_text(ln_stripped)}")
-
     if cxio:
         entry_uuid = entry.get("uuid")
         if entry_uuid:
