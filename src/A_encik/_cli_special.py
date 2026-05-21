@@ -134,7 +134,6 @@ def register_commands(app: typer.Typer) -> None:
             ))
 
         if cio:
-            rebuilt = service.reconcile_all_computed_fields()
             info(tr_multi(
                 f"Repacigis {count} ligilojn, rekonstruis {rebuilt} enirojn",
                 f"Reconciled {count} links, rebuilt {rebuilt} entries",
