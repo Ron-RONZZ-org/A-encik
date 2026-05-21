@@ -225,6 +225,7 @@ def fix_unquoted_uuids(text: str) -> str:
     # TOML string-state tracking — skip content inside quotes
     in_str: str | None = None  # None / '"' / "'"
     in_multiline: str | None = None  # None / '"""' / "'''"
+    _ml_skip_close: int = 0  # skip close check for first chars of multiline
 
     while i < len(text):
         ch = text[i]
@@ -233,7 +234,9 @@ def fix_unquoted_uuids(text: str) -> str:
         if in_multiline:
             result.append(ch)
             i += 1
-            if text[i - 3 : i] == in_multiline:
+            if _ml_skip_close > 0:
+                _ml_skip_close -= 1
+            elif text[i - 3 : i] == in_multiline:
                 in_multiline = None
                 in_str = None
             continue
@@ -251,6 +254,7 @@ def fix_unquoted_uuids(text: str) -> str:
             if text[i : i + 3] in ('"""', "'''"):
                 in_multiline = text[i : i + 3]
                 in_str = ch
+                _ml_skip_close = 3  # don't match opening """ as closing
             else:
                 in_str = ch
             result.append(ch)
