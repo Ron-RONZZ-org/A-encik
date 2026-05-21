@@ -53,6 +53,7 @@ class LinksMixin:
         """Add a reverse link to *target_uuid* pointing back to *source_uuid*.
 
         Skips if the reverse link already exists.
+        Uses direct DB update to avoid recursive ``_sync_links``.
         """
         target = self.get(target_uuid)
         if not target:
@@ -68,10 +69,17 @@ class LinksMixin:
                 return
         reverse_tipo = self._reverse_tipo(tipo)
         ligilo.append([source_uuid, reverse_tipo])
-        self.update(target_uuid, {"ligilo": ligilo})
+        # Direct DB write — avoid self.update() recursion
+        self.db.execute(
+            "UPDATE encik SET ligilo = ?, modifita_je = datetime('now') WHERE uuid = ?",
+            (json.dumps(ligilo, ensure_ascii=False), target_uuid),
+        )
 
     def _remove_reverse_link(self, source_uuid: str, target_uuid: str) -> None:
-        """Remove any reverse link pointing to *source_uuid* from *target_uuid*."""
+        """Remove any reverse link pointing to *source_uuid* from *target_uuid*.
+
+        Uses direct DB update to avoid recursive ``_sync_links``.
+        """
         target = self.get(target_uuid)
         if not target:
             return
@@ -86,7 +94,10 @@ class LinksMixin:
             if self._link_uuid(link) != source_uuid
         ]
         if len(new_ligilo) != len(ligilo):
-            self.update(target_uuid, {"ligilo": new_ligilo})
+            self.db.execute(
+                "UPDATE encik SET ligilo = ?, modifita_je = datetime('now') WHERE uuid = ?",
+                (json.dumps(new_ligilo, ensure_ascii=False), target_uuid),
+            )
 
     @staticmethod
     def _ligilo_uuids(ligilo: Any) -> set[str]:
@@ -138,12 +149,26 @@ class LinksMixin:
     def _remove_stale_reverse_links(
         self, uuid: str, old_ligilo: list
     ) -> None:
-        """Remove reverse links from entries that pointed to this one."""
-        all_entries = self.list()
-        for entry in all_entries:
-            ligilo = entry.get("ligilo", [])
-            if isinstance(ligilo, str):
-                ligilo = [ligilo]
+        """Remove reverse links from entries that pointed to this one.
+
+        Uses a targeted SQL query (``LIKE`` on ligilo column) to find
+        only candidates, avoiding a full table scan.
+        Uses direct DB write to avoid recursive ``_sync_links``.
+        """
+        rows = self.db.execute(
+            "SELECT uuid, ligilo FROM encik WHERE ligilo LIKE ?",
+            (f"%{uuid}%",),
+        )
+        for row in rows:
+            ligilo_raw = row.get("ligilo") or "[]"
+            ligilo: Any = []
+            if isinstance(ligilo_raw, str):
+                try:
+                    ligilo = json.loads(ligilo_raw)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+            elif isinstance(ligilo_raw, list):
+                ligilo = ligilo_raw
             modified = False
             new_ligilo = []
             for link in ligilo:
@@ -153,4 +178,7 @@ class LinksMixin:
                 else:
                     modified = True
             if modified:
-                self.update(entry["uuid"], {"ligilo": new_ligilo})
+                self.db.execute(
+                    "UPDATE encik SET ligilo = ?, modifita_je = datetime('now') WHERE uuid = ?",
+                    (json.dumps(new_ligilo, ensure_ascii=False), row["uuid"]),
+                )

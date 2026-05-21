@@ -68,11 +68,18 @@ class EncikService(SearchMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMi
                 f"Datumbaza konstricefkizo (kodo={exc.sqlite_errorcode}): {exc}"
             ) from exc
         entry = self._deserialize_row(result)
-        self._sync_links(entry)
+        self._sync_links(entry)                                           # rebuild outgoing links
+        self._sync_bidirectional_relations(entry, previous_ligilo=[])     # create reverse links
         return entry
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update with JSON serialization. FTS reindexing handled by parent."""
+        # Save old ligilo BEFORE update (for bidirectional diff)
+        old = self.get(uuid)
+        old_ligilo = (old or {}).get("ligilo", [])
+        if isinstance(old_ligilo, str):
+            old_ligilo = []
+
         if "terminologio" in data:
             data["terminologio_search"] = self._ensure_terminologio_search(
                 data["terminologio"]
@@ -85,7 +92,8 @@ class EncikService(SearchMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMi
                 f"Datumbaza konstricefkizo (kodo={exc.sqlite_errorcode}): {exc}"
             ) from exc
         entry = self._deserialize_row(result)
-        self._sync_links(entry)
+        self._sync_links(entry)                                           # rebuild outgoing links
+        self._sync_bidirectional_relations(entry, previous_ligilo=old_ligilo)  # diff + sync reverse
         return entry
 
     def delete(self, uuid: str, soft: bool = True) -> None:
@@ -212,25 +220,15 @@ class EncikService(SearchMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMi
         rows = self.db.execute(sql)
         return [self._deserialize_row(row) for row in rows]
 
-    # ── Lifecycle hooks ──────────────────────────────────────────────────────
+    # ── Lifecycle hooks (no-ops — handled in create/update directly) ────────
 
     def _post_create(self, data: dict[str, Any], result: dict[str, Any]) -> None:
-        """Hook called after create — sync bidirectional links."""
-        self._sync_bidirectional_relations(result)
+        pass
 
     def _post_update(
         self, uuid: str, old_data: dict[str, Any] | None, new_data: dict[str, Any]
     ) -> None:
-        """Hook called after update — sync bidirectional links.
-
-        Compares old vs new ligilo (post ``_sync_links``) and adds/removes
-        reverse links in target entries accordingly.
-        """
-        entry = self.get(uuid)
-        if not entry:
-            return
-        old_ligilo = (old_data or {}).get("ligilo", [])
-        self._sync_bidirectional_relations(entry, previous_ligilo=old_ligilo)
+        pass
 
     def _post_delete(self, uuid: str, data: dict[str, Any] | None, soft: bool) -> None:
         """Hook called after delete — remove stale reverse links."""
