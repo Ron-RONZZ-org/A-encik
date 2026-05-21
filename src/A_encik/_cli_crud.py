@@ -239,9 +239,12 @@ def register_commands(app: typer.Typer) -> None:
         dosiero: Optional[Path] = typer.Argument(
             None,
             help=tr_multi(
-                ".enc dosiero por rekta anstataŭigo",
-                ".enc file for full replacement",
-                "Fichier .enc pour remplacement complet",
+                ".enc dosiero por rekta anstataŭigo. "
+                "Ligilo ekz: ligilo = [[\"uuid\", \"tipo\"]]",
+                ".enc file for full replacement. "
+                "ligilo format: ligilo = [[\"uuid\", \"tipo\"]]",
+                "Fichier .enc pour remplacement complet. "
+                "Format ligilo : ligilo = [[\"uuid\", \"tipo\"]]",
             ),
         ),
         kopii: bool = typer.Option(

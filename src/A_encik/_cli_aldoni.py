@@ -42,9 +42,12 @@ def register_commands(app: typer.Typer) -> None:
         dosiero: Optional[str] = typer.Argument(
             None,
             help=tr_multi(
-                "Vojo al .enc dosiero (malnepra se --jaro/-jardeko/-jarcento uzatas)",
-                "Path to .enc file (optional if --jaro/--jardeko/--jarcento used)",
-                "Chemin vers fichier .enc (optionnel si --jaro/--jardeko/--jarcento utilisé)",
+                "Vojo al .enc dosiero. Ligilo ekz: ligilo = [[\"uuid\", \"tipo\"]] "
+                "aŭ ligilo = [\"uuid1\", \"uuid2\"]",
+                "Path to .enc file. ligilo format: ligilo = [[\"uuid\", \"tipo\"]] "
+                "or ligilo = [\"uuid1\", \"uuid2\"]",
+                "Chemin vers fichier .enc. Format ligilo : "
+                "ligilo = [[\"uuid\", \"tipo\"]] ou ligilo = [\"uuid1\", \"uuid2\"]",
             ),
         ),
         jaro: Optional[int] = typer.Option(

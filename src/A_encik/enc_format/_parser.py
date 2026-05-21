@@ -57,6 +57,16 @@ def _format_enc_parse_error(raw: str, exc: Exception) -> str:
         hints.append("Verŝajne mankas '=' inter kampnomo kaj valoro.")
     if "unterminated" in lowered or "unclosed" in lowered:
         hints.append("Mankas ferma citilo, ] aŭ }.")
+    if "expected newline" in lowered and "after a statement" in lowered:
+        hints.append(
+            "Ĉu ne-cititaj valoroj en tabelo (ligilo/superklaso)? "
+            "Citiloj bezonatas por tekstoj: ligilo = [\"uuid\", \"tipo\"], "
+            "ne ligilo = [uuid, tipo]"
+        )
+        hints.append(
+            "Formato por ligilo: ligilo = [[\"uuid\", \"tipo\"], ...] "
+            "aŭ ligilo = [\"uuid1\", \"uuid2\"]"
+        )
 
     # Try to extract line number from TOML error
     match = re.search(r"line (\d+), col (\d+)", msg)
