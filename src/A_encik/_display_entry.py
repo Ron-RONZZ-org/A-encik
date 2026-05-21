@@ -28,7 +28,7 @@ SKIP_FIELDS = {"titolo"}
 # Internal/technical fields never shown to users (ranking, search, etc.)
 INTERNAL_FIELDS = {
     "_title_prefix", "_frequency", "_compactness",
-    "terminologio_search", "titolo_fold", "enhavo",
+    "terminologio_search", "titolo_fold",
 }
 
 # Fields suppressed when a richer alternative exists
@@ -45,6 +45,7 @@ DISPLAY_FIELD_ORDER = [
     "difinio",   # only shown if difinoj empty (via FIELD_SUPPRESSIONS)
     "semantika",
     "ligilo",
+    "enhavo",
     "fonto",
     "citajo",
     "datumo",

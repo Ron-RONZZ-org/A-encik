@@ -73,6 +73,14 @@ def display_entry_panel(
                     child_title = entry_locale_title(child_entry)
                     lines.append(f"    {child_title}  [dim]#{child_entry.get('uuid', '')[:8]}[/dim]")
 
+    enhavo = (entry.get("enhavo") or "").strip()
+    if enhavo:
+        lines.append(f"  [dim]{'enhavo:':<{LW}}[/dim]")
+        for ln in enhavo.splitlines():
+            ln_stripped = ln.strip()
+            if ln_stripped:
+                lines.append(f"    {render_markdown_text(ln_stripped)}")
+
     ligilo_items = display_ligilo_items(entry)
     if ligilo_items:
         for item in ligilo_items:
