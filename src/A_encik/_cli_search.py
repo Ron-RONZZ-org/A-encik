@@ -125,8 +125,9 @@ def register_commands(app: typer.Typer) -> None:
             if html:
                 from A_encik._display_graph import render_linked_graph_html
                 from A_encik.display import preview_html
+                from A_encik.display_helpers import entry_locale_title as _elt
                 graph_html = render_linked_graph_html(target, max_depth=2)
-                path = preview_html(graph_html, title=target.get("titolo", "encik"))
+                path = preview_html(graph_html, title=_elt(target) or "encik")
                 info(tr_multi(
                     f"Grafo preta: file://{path}",
                     f"Graph ready: file://{path}",
