@@ -1,0 +1,30 @@
+# Read the Docs configuration
+# https://docs.readthedocs.io/en/stable/config-file/v2.html
+
+version: 2
+
+build:
+  os: ubuntu
+  tools:
+    python: "3.11"
+
+python:
+  install:
+    - method: pip
+      extra_requirements:
+        - docs
+
+mkdocs:
+  configuration: mkdocs.yml
+  fail_on_warning: false
+
+sources:
+  - type: mkdocs
+    directory: docs/en
+    name: English
+  - type: mkdocs
+    directory: docs/eo
+    name: Esperanto
+  - type: mkdocs
+    directory: docs/fr
+    name: Français

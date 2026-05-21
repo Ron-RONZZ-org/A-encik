@@ -1,0 +1,26 @@
+# A-encik documentation configuration
+
+site_name: A-encik — Persona Scio-Administrado
+site_description: "Personal knowledge management microapp for the A ecosystem"
+site_url: https://github.com/Ron-RONZZ-org/A-encik
+repo_url: https://github.com/Ron-RONZZ-org/A-encik
+repo_name: Ron-RONZZ-org/A-encik
+
+copyright: "GPL-3.0-only"
+
+nav:
+  - Home: https://github.com/Ron-RONZZ-org/A-encik
+  - Documentation:
+    - "English": en/enc-format.md
+    - "Esperanto": eo/enc-formato.md
+    - "Français": fr/format-enc.md
+
+theme:
+  name: readthedocs
+  highlight_language: python
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
