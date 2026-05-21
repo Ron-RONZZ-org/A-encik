@@ -17,88 +17,23 @@ from A_encik.semantika import (
     normalize_semantika_group_name,
     write_semantika_group_rows,
 )
-from A_encik.semantika.config import _RESERVED_SUBCOMMANDS
+
 from A_encik.semantika.wikidata import (
     semantika_search_languages,
     wikidata_property_metadata,
     wikidata_search_properties,
 )
 
+from A_encik._cli_semantika_grupo import grupo_app
+
 semantika_app = typer.Typer(
     name="semantika",
     help=SEMANTIKA_HELPO_TEKSTO,
-    no_args_is_help=False,
-    invoke_without_command=True,
+    no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
 )
 
-_REGISTERED_GROUP_COMMANDS: set[str] = set()
-
-
-def _print_semantika_kategorio(kategorio: str) -> None:
-    """Print semantic links in a category as a Rich table."""
-    from rich.table import Table
-    from rich.box import SIMPLE as BOX_SIMPLE
-
-    groups = load_semantika_groups()
-    rows = groups.get(kategorio)
-    if not rows:
-        error(tr_multi(f"Nekonata semantika grupo: {kategorio!r}", f"Unknown semantika group: {kategorio!r}", f"Groupe semantika inconnu : {kategorio!r}"))
-        raise typer.Exit(1)
-    table = Table(
-        title=tr_multi(
-            f"Semantikaj ligiloj — {kategorio}",
-            f"Semantic links — {kategorio}",
-            f"Liens sémantiques — {kategorio}",
-        ),
-        show_header=True,
-        header_style="bold",
-        expand=False,
-        box=BOX_SIMPLE,
-    )
-    table.add_column("LIGILO", style="cyan", no_wrap=True)
-    table.add_column(tr_multi("PRISKRIBO", "Description"), style="white")
-    table.add_column(tr_multi("ALIAZOJ", "Aliases"))
-    for row in rows:
-        ligilo = str(row.get("ligilo") or "")
-        priskribo = str(row.get("priskribo") or "") or "-"
-        aliases = [str(a) for a in (row.get("aliasoj") or [])]
-        alias_text = ", ".join(aliases[:5]) if aliases else "-"
-        if len(aliases) > 5:
-            alias_text += ", ..."
-        table.add_row(ligilo, priskribo, alias_text)
-    console.print(table)
-    info(tr_multi(
-        "Uzo: en `ligilo` uzu UUID:semantiko (ekz: 1234abcd:rdf:type).",
-        "Usage: in `ligilo` use UUID:semantika (e.g. 1234abcd:rdf:type).",
-        "Utilisation : dans `ligilo` utiliser UUID:semantiko (ex: 1234abcd:rdf:type).",
-    ))
-
-
-def _register_semantika_group_commands() -> None:
-    """Dynamically register one command per group CSV file."""
-    groups = load_semantika_groups()
-    for group_name in sorted(groups.keys()):
-        if group_name in _RESERVED_SUBCOMMANDS | _REGISTERED_GROUP_COMMANDS:
-            continue
-        help_text = tr_multi(
-            f"Montri semantikajn ligilojn de grupo '{group_name}'.",
-            f"Show semantic links of group '{group_name}'.",
-            f"Afficher les liens sémantiques du groupe '{group_name}'.",
-        )
-
-        def _make_cmd(g: str = group_name) -> None:
-            _print_semantika_kategorio(g)
-
-        semantika_app.command(group_name, help=help_text)(_make_cmd)
-        _REGISTERED_GROUP_COMMANDS.add(group_name)
-
-
-@semantika_app.callback(invoke_without_command=True)
-def _semantika_root(ctx: typer.Context) -> None:
-    _register_semantika_group_commands()
-    if ctx.invoked_subcommand is None:
-        console.print(ctx.get_help())
+semantika_app.add_typer(grupo_app, name="grupo")
 
 
 @semantika_app.command("serci")
@@ -293,38 +228,8 @@ def semantika_ligilo_aldoni(
     write_semantika_group_rows(group_name, rows)
     from A_encik.semantika.config import invalidate_config_cache
     invalidate_config_cache()
-    _register_semantika_group_commands()
 
     info(tr_multi(f"Aldonis {ligilo} al grupo '{group_name}'.", f"Added {ligilo} to group '{group_name}'.", f"Ajouté {ligilo} au groupe '{group_name}'."))
-
-
-@semantika_app.command("ls")
-def semantika_ls() -> None:
-    """List all semantika groups with row counts and file paths."""
-    from rich.table import Table
-    from rich.box import SIMPLE as BOX_SIMPLE
-    from A_encik.semantika.config import semantika_group_file
-
-    groups = load_semantika_groups()
-    if not groups:
-        info(tr_multi("Neniuj grupoj.", "No groups.", "Aucun groupe."))
-        return
-
-    table = Table(
-        title=tr_multi("Semantikaj grupoj", "Semantika groups", "Groupes sémantiques"),
-        show_header=True,
-        header_style="bold",
-        expand=False,
-        box=BOX_SIMPLE,
-    )
-    table.add_column(tr_multi("Grupo", "Group"), style="cyan", no_wrap=True)
-    table.add_column(tr_multi("Eniroj", "Entries"), justify="right")
-    table.add_column(tr_multi("Dosiero", "File"))
-    for name in sorted(groups.keys()):
-        path = semantika_group_file(name)
-        rows = groups[name]
-        table.add_row(name, str(len(rows)), str(path))
-    console.print(table)
 
 
 @semantika_app.command("forigi")
@@ -389,7 +294,6 @@ def semantika_ligilo_forigi(
     write_semantika_group_rows(group_name, rows)
     from A_encik.semantika.config import invalidate_config_cache
     invalidate_config_cache()
-    _register_semantika_group_commands()
 
     info(tr_multi(
         f"Forigis {ligilo} el grupo '{group_name}'.",
@@ -485,7 +389,6 @@ def semantika_ligilo_modifi(
     write_semantika_group_rows(group_name, rows)
     from A_encik.semantika.config import invalidate_config_cache
     invalidate_config_cache()
-    _register_semantika_group_commands()
 
     info(tr_multi(
         f"Modifis {ligilo} en grupo '{group_name}'.",

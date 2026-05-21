@@ -123,7 +123,11 @@ Three-layer system for structured knowledge:
 
 | Command | What it does |
 |---------|-------------|
-| ``encik semantika <group>`` | Show semantic links in a category (dynamically registered per CSV) |
+| ``encik semantika grupo vidi <name>`` | Show semantic links in a group |
+| ``encik semantika grupo ls`` | List all groups |
+| ``encik semantika grupo aldoni <name>`` | Create a new empty group |
+| ``encik semantika grupo modifi <old> <new>`` | Rename a group |
+| ``encik semantika grupo forigi <name>`` | Delete a group |
 | ``encik semantika serci <query>`` | Search Wikidata + local CSVs for property definitions |
 | ``encik semantika aldoni <id> <group>`` | Add a Wikidata property to a CSV group with validation |
 | ``encik semantika-serci <conditions>`` | Filter entries by semantic conditions |
@@ -188,7 +192,7 @@ All A-ecosystem development **must** use `uv` as the package manager:
 - Don't hardcode paths — use `A.core.paths`
 - Don't implement utilities that should be in core
 - **generi** (previous TODO stub): now implemented — delegates to A-agento via runtime detection. If A-agento is not installed, prompts user to install it.
-- **semantika**: already fully implemented (semantika-serci, semantika group commands)
+- **semantika**: already fully implemented (semantika-serci, semantika grupo subcommands)
 
 ## Database Schema Migrations
 

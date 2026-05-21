@@ -34,9 +34,8 @@ from A_encik._cli_rubujo import rubujo_app  # noqa: E402
 app.add_typer(rubujo_app, name="rubujo")
 
 # Register semantika sub-typer
-from A_encik._cli_semantika import semantika_app, _register_semantika_group_commands  # noqa: E402
+from A_encik._cli_semantika import semantika_app  # noqa: E402
 
-_register_semantika_group_commands()
 app.add_typer(semantika_app, name="semantika")
 
 __all__ = ["app"]

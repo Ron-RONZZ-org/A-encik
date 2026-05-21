@@ -57,14 +57,15 @@ SEMANTIKA_HELPO_TEKSTO = (
     "(LIGILO, PRISKRIBO, ALIAZOJ columns).\n"
     "\n"
     "Subcommands:\n"
-    "- encik semantika <grupo>          Show semantic links in category\n"
-    "- encik semantika ls               List all groups\n"
-    "- encik semantika serci <query>    Search Wikidata for semantic links\n"
-    "- encik semantika aldoni <id> <grupo>   Add semantic link to category\n"
-    "- encik semantika modifi <id> <grupo>   Modify a semantic link\n"
-    "- encik semantika forigi <id> <grupo>   Delete a semantic link\n"
-    "\n"
-    "Groups: generala, abstrakta, persono, geografio"
+    "- encik semantika serci <query>        Search Wikidata + local groups\n"
+    "- encik semantika aldoni <id> <group>  Add semantic link to group\n"
+    "- encik semantika forigi <id> <group>  Delete semantic link from group\n"
+    "- encik semantika modifi <id> <group>  Modify a semantic link\n"
+    "- encik semantika grupo ls             List all groups\n"
+    "- encik semantika grupo vidi <name>    Show entries in a group\n"
+    "- encik semantika grupo aldoni <name>  Create a new group\n"
+    "- encik semantika grupo modifi <old> <new>  Rename a group\n"
+    "- encik semantika grupo forigi <name>  Delete a group"
 )
 
 # Derived lookup maps
@@ -83,9 +84,10 @@ _SEMANTIKA_DEFINOJ_MAP: dict[str, tuple[str, tuple[str, ...]]] = {
 # Config directory
 _SEMANTIKA_CONFIG_DIR: Path | None = None
 _SEMANTIKA_CONFIG_CACHE: dict[str, Any] = {"signature": None, "groups": None}
-_RESERVED_SUBCOMMANDS: frozenset[str] = frozenset({"ls", "serci", "aldoni", "modifi", "forigi"})
+_RESERVED_SUBCOMMANDS: frozenset[str] = frozenset(
+    {"ls", "serci", "aldoni", "modifi", "forigi", "grupo"}
+)
 _CSV_HEADERS: tuple[str, str, str] = ("LIGILO", "PRISKRIBO", "ALIAZOJ")
-_REGISTERED_GROUP_COMMANDS: set[str] = set()
 
 
 def _get_config_dir() -> Path:
@@ -272,3 +274,82 @@ def invalidate_config_cache() -> None:
     """Invalidate the cached groups (call after writing)."""
     global _SEMANTIKA_CONFIG_CACHE
     _SEMANTIKA_CONFIG_CACHE = {"signature": None, "groups": None}
+
+
+def create_semantika_group(name: str) -> Path:
+    """Create a new empty semantika group CSV file.
+
+    Args:
+        name: Group name (normalized via :func:`normalize_semantika_group_name`).
+
+    Returns:
+        Path to the created CSV file.
+
+    Raises:
+        ValueError: If name is invalid.
+        FileExistsError: If group already exists.
+    """
+    group_name = normalize_semantika_group_name(name)
+    path = semantika_group_file(group_name)
+    if path.exists():
+        raise FileExistsError(
+            f"Group '{group_name}' already exists."
+        )
+    _get_config_dir().mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(_CSV_HEADERS)
+    invalidate_config_cache()
+    return path
+
+
+def rename_semantika_group(old_name: str, new_name: str) -> Path:
+    """Rename a semantika group by renaming its CSV file.
+
+    Args:
+        old_name: Current group name.
+        new_name: New group name.
+
+    Returns:
+        Path to the renamed CSV file.
+
+    Raises:
+        ValueError: If either name is invalid.
+        FileNotFoundError: If old group does not exist.
+        FileExistsError: If new group name already exists.
+    """
+    old = normalize_semantika_group_name(old_name)
+    new = normalize_semantika_group_name(new_name)
+    old_path = semantika_group_file(old)
+    new_path = semantika_group_file(new)
+    if not old_path.exists():
+        raise FileNotFoundError(
+            f"Group '{old}' does not exist."
+        )
+    if new_path.exists():
+        raise FileExistsError(
+            f"Group '{new}' already exists."
+        )
+    old_path.rename(new_path)
+    invalidate_config_cache()
+    return new_path
+
+
+def delete_semantika_group(name: str) -> None:
+    """Delete a semantika group CSV file.
+
+    Args:
+        name: Group name.
+
+    Raises:
+        ValueError: If name is invalid.
+        FileNotFoundError: If group does not exist.
+    """
+    group_name = normalize_semantika_group_name(name)
+    path = semantika_group_file(group_name)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Group '{group_name}' does not exist."
+        )
+    path.unlink()
+    invalidate_config_cache()

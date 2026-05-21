@@ -345,13 +345,10 @@ class TestSemantikaCommand:
     """Tests for semantika command."""
     
     def test_semantika_shows_help(self, runner):
-        """Test semantika shows help with groups."""
+        """Test semantika shows help with grupos."""
         result = runner.invoke(app, ["semantika"])
-        
         assert result.exit_code == 0
-        assert "serci" in result.output
-        assert "aldoni" in result.output
-        assert "generala" in result.output
+        assert "grupo" in result.output
     
     def test_semantika_serci_requires_query(self, runner):
         """Test semantika serci requires argument."""
