@@ -12,6 +12,7 @@ from rich.box import SIMPLE as BOX_SIMPLE
 from A import error, info, warning, copy_to_clipboard
 from A.console import console
 from A import tr_multi
+from A.utils.interactive import select_candidate
 from rich.panel import Panel
 
 from A_encik.service import get_service
@@ -222,8 +223,44 @@ def register_commands(app: typer.Typer) -> None:
                 entry = matches[0]
 
         if not entry:
-            error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
-            raise typer.Exit(1)
+            # Check if input looks like a UUID (all hex, 8+ chars) — genuine not-found
+            import re
+            if re.match(r'^[0-9a-fA-F]{8,}$', ref):
+                error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
+                raise typer.Exit(1)
+            # Not UUID-like — fall back to ranked search (matching autish-legacy vidi behavior)
+            if kopii or semantika_kopii:
+                error(tr_multi(
+                    "--kopii/--semantika-kopii requires a UUID argument",
+                    "--kopii/--semantika-kopii requires a UUID argument",
+                    "--kopii/--semantika-kopii necessite un argument UUID",
+                ))
+                raise typer.Exit(1)
+            entries = service.search_ranked(ref, limit=20)
+            if not entries:
+                error(tr_multi(f"Encik {ref} ne trovitas", f"Entry {ref} not found", f"Entree {ref} non trouve"))
+                raise typer.Exit(1)
+            if len(entries) == 1:
+                entry = entries[0]
+            else:
+                result = select_candidate(
+                    entries,
+                    columns=[
+                        {"header": "UUID", "style": "dim", "width": 10},
+                        {"header": "Titolo"},
+                    ],
+                    row_formatter=lambda e, i: [
+                        e.get("uuid", "")[:8],
+                        entry_locale_title(e),
+                    ],
+                )
+                if result is None:
+                    raise typer.Exit(1)
+                idx, _ = result
+                entry = entries[idx]
+            # Disable clipboard for search fallback
+            kopii = False
+            semantika_kopii = False
 
         if html or open_browser:
             from A_encik.display import preview_entry
