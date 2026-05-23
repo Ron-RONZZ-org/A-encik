@@ -87,6 +87,28 @@ In autish, encik and vorto share `ligilo` (link) relations. In A:
 
 ```
 src/A_encik/
+├── __init__.py              # exports: app
+├── cli.py                  # Typer app (crud + semantika)
+├── service.py              # EncikService (CRUD + FTS + reconciliation)
+├── _display.py             # Output formatting (table, preview, link display)
+├── _enc_processor.py       # Text processing (markup conversion, LaTeX fix, preview)
+├── _search_mixin.py        # FTS5 + SQL search logic (~250 lines)
+├── _reconcile_mixin.py     # Reconciliation logic (~356 lines)
+├── _validation.py          # Input validation (required_fields, deduplicate, etc.)
+├── data/
+│   ├── __init__.py
+│   ├── storage.py          # SQLite (get_db, schema, FTS config)
+│   ├── _cache_db.py        # Semantic cache DB connection + schema
+│   ├── _cache_lookup.py    # Property lookup (lookup_property)
+│   ├── _cache_api.py       # API-based caching
+│   ├── _cache_negative.py  # Negative cache (404s)
+│   ├── _cache_store.py     # Property storage (store_property)
+│   ├── _cache_maintenance.py # GC and maintenance
+│   └── semantika_cache.py  # Semantic cache facade (~34 lines)
+└── semantika/
+    └── __init__.py         # Semantika CLI sub-app (grupo + serci)
+```
+src/A_encik/
 ├── __init__.py           # Plugin exports
 ├── cli.py              # Typer app
 ├── service.py          # EncikService (extends CRUDService + core FTS5)
