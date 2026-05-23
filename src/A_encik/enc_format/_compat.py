@@ -158,33 +158,55 @@ def fix_inline_table_commas(text: str) -> str:
     Legacy autish allowed: ``{titolo="..." autoro="..."}``
     But TOML requires: ``{titolo="...", autoro="..."}``
     """
-    result = []
+    result: list[str] = []
     brace_depth = 0
-    prev_char = ""
-    for ch in text:
-        if ch == "{":
-            brace_depth += 1
-            result.append(ch)
-        elif ch == "}":
-            brace_depth -= 1
-            result.append(ch)
-        elif ch == "=" and brace_depth > 0 and prev_char in ('"', "'"):
-            # This is inside an inline table, after a string value
-            # which might be missing a comma before the next key=value
-            result.append(ch)
+    in_string = False
+    str_char: str | None = None
+    i = 0
+
+    while i < len(text):
+        ch = text[i]
+
+        if not in_string:
+            if ch == "{":
+                brace_depth += 1
+                result.append(ch)
+            elif ch == "}":
+                brace_depth -= 1
+                result.append(ch)
+            elif ch in ('"', "'"):
+                # Opening quote — start tracking string
+                in_string = True
+                str_char = ch
+                result.append(ch)
+            else:
+                result.append(ch)
         else:
-            # After a closing quote inside inline table, if next non-space is
-            # alphanumeric or _, add a comma
+            # Inside a string
             result.append(ch)
-            if brace_depth > 0 and ch in ('"', "'") and prev_char != "\\":
-                # Look ahead for missing comma
-                j = len(result)
-                while j < len(text) and text[j] in " \t":
-                    j += 1
-                if j < len(text) and text[j] not in ("}", ",", "]"):
-                    result.append(", ")
-                    # skip the original space
-        prev_char = ch
+            if ch == "\\":
+                # Escape: consume next char as-is
+                if i + 1 < len(text):
+                    result.append(text[i + 1])
+                    i += 2
+                    continue
+            elif ch == str_char:
+                # Closing quote — check if next non-space needs a comma
+                in_string = False
+                str_char = None
+                if brace_depth > 0:
+                    # Peek ahead past whitespace
+                    j = i + 1
+                    while j < len(text) and text[j] in " \t":
+                        j += 1
+                    if j < len(text) and text[j] not in (",", "}", "]", "\n"):
+                        # Missing comma — add one before the whitespace
+                        # Insert comma before the spaces we consumed
+                        result.append(",")
+            else:
+                pass  # Normal string content, already appended
+
+        i += 1
 
     return "".join(result)
 
@@ -324,19 +346,26 @@ def extract_enhavo_block(raw: str) -> tuple[str, str]:
 
     Legacy autish allowed a bare ``\"\"\"...\"\"\"`` at the top level
     to define ``enhavo`` without an ``enhavo = `` prefix.
+    Only bare ``\"\"\"...\"\"\"`` blocks are extracted — those already
+    prefixed with ``enhavo = `` are left alone.
 
     Returns (stripped_toml, extracted_enhavo).
     """
     stripped_core = raw
     extracted = ""
 
-    # Find a standalone """ block (not preceded by =)
-    pattern = re.compile(r'(?<!=)\s*"""\n(.*?)\n"""', re.DOTALL)
-    match = pattern.search(raw)
-    if match:
+    # Find a """ ... """ block
+    pattern = re.compile(r'"""\n(.*?)\n"""', re.DOTALL)
+    for match in pattern.finditer(raw):
+        # Check if the text before this block ends with = (with optional whitespace)
+        before = raw[: match.start()].rstrip()
+        if before.endswith("="):
+            # This is enhavo = """...""" — not a bare block, skip it
+            continue
         extracted = match.group(1).strip()
         # Remove the block from the text
         stripped_core = raw[: match.start()] + raw[match.end() :]
+        break  # Only extract the first bare block
 
     return stripped_core, extracted
 
