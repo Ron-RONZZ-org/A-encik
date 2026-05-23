@@ -344,10 +344,14 @@ def parse_enc_file(path: Path) -> dict[str, Any]:
             "terminologio.xx kaj difino.xx."
         )
 
-    titolo = next(iter(terminologio.values()))
-    difinio = difinoj.get(next(iter(terminologio.keys())), "")
-    if not difinio and difinoj:
-        difinio = next(iter(difinoj.values()))
+    if terminologio:
+        titolo = next(iter(terminologio.values()))
+        difinio = difinoj.get(next(iter(terminologio.keys())), "")
+        if not difinio and difinoj:
+            difinio = next(iter(difinoj.values()))
+    else:
+        titolo = ""
+        difinio = next(iter(difinoj.values()), "")
 
     # Build entry dict (no primary titolo — all terminologio values are equal)
     entry: dict[str, Any] = {
