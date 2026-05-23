@@ -112,6 +112,11 @@ src/A_encik/
 ├── __init__.py           # Plugin exports
 ├── cli.py              # Typer app
 ├── service.py          # EncikService (extends CRUDService + core FTS5)
+├── enc_format/         # ENC file format (TOML-based) parser/serializer
+│   ├── __init__.py     # Exports: parse_enc_file, entry_to_enc, validate_enc_entry
+│   ├── _parser.py      # .enc file parser with legacy compat (436 lines)
+│   ├── _serializer.py  # entry-to-.enc serializer (194 lines)
+│   └── _compat.py      # Legacy autish compatibility pre-processors (382 lines)
 ├── semantika/          # Semantic link management
 │   ├── __init__.py     # Exports
 │   ├── config.py       # CSV group loading/writing, default definitions
