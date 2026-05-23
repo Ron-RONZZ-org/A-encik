@@ -14,12 +14,12 @@ from A_encik.data.storage import get_db, row_to_dict, ENCIK_FTS_CONFIG
 from A_encik._time_entry import TimeEntryMixin
 from A_encik._graph import GraphMixin
 from A_encik._links import LinksMixin
-from A_encik._search_service import SearchMixin
+from A_encik._search_service import SearchMixin, ReconMixin
 
 _encik_service: EncikService | None = None
 
 
-class EncikService(SearchMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
+class EncikService(SearchMixin, ReconMixin, CRUDService, TimeEntryMixin, GraphMixin, LinksMixin):
     """Encik service: CRUD + time entries + graph + links."""
 
     def __init__(self, db):
