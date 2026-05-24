@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from A.core.paths import data_dir as _data_dir, ensure_dirs as _ensure_dirs
+from A.core.backup_targets import BackupTarget
 from A.data.base import (
     SQLiteDB,
     backup_db,
@@ -392,4 +393,16 @@ def row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-__all__ = ["ensure_dirs", "get_db", "migrate_db", "repair_db", "row_to_dict", "ENCIK_FTS_CONFIG"]
+def get_backup_targets() -> list[BackupTarget]:
+    """Return backup targets for A-encik."""
+    return [
+        BackupTarget(
+            path=_DB_FILE,
+            category="data",
+            module="encik",
+            label="Encik database",
+        ),
+    ]
+
+
+__all__ = ["ensure_dirs", "get_db", "migrate_db", "repair_db", "row_to_dict", "ENCIK_FTS_CONFIG", "get_backup_targets"]

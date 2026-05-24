@@ -27,6 +27,9 @@ encik = "A_encik.cli:app"
 [project.entry-points."A.migrations"]
 A-encik = "A_encik.data.migration_register:register"
 
+[project.entry-points."A.backup"]
+encik = "A_encik.data.storage:get_backup_targets"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/A_encik"]
 
