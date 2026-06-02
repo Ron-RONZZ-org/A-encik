@@ -198,7 +198,6 @@ def render_entry_html(
 
 def preview_entry(
     entry: dict[str, Any],
-    open_browser: bool = True,
     title: str | None = None,
 ) -> Path:
     """Render and preview an entry in browser.
@@ -209,7 +208,6 @@ def preview_entry(
 
     Args:
         entry: The entry dictionary
-        open_browser: If True, open in browser
         title: Optional title override (locale-aware)
 
     Returns:
@@ -220,7 +218,7 @@ def preview_entry(
     html = render_entry_html(entry, _link_depth=0)
     if not title:
         title = _elt(entry) or "encik"
-    return preview_html(html, open_browser=open_browser, title=title)
+    return preview_html(html, title=title)
 
 
 def maybe_auto_open_browser(entry: dict[str, Any]) -> bool:
