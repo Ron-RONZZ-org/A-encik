@@ -7,7 +7,7 @@ from typing import Optional
 
 import typer
 
-from A import error, info, copy_to_clipboard
+from A import error, info, warning, copy_to_clipboard
 from A.console import console
 from A import tr_multi
 
@@ -276,7 +276,13 @@ def register_commands(app: typer.Typer) -> None:
 
         if kopii or semantika_kopii:
             if kopii:
-                copy_to_clipboard(f"#{entry['uuid'][:8]}")
+                ok, reason = copy_to_clipboard(f"#{entry['uuid'][:8]}")
+                if not ok:
+                    warning(tr_multi(
+                        "Ne povis kopii UUID al poŝo: {kialo}",
+                        "Could not copy UUID to clipboard: {kialo}",
+                        "Impossible de copier l'UUID dans le presse-papier : {kialo}",
+                    ).format(kialo=reason))
             if semantika_kopii:
                 copy_entry_reference(entry, semantika=True)
 

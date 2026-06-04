@@ -14,7 +14,7 @@ from rich.table import Table
 from rich.box import SIMPLE as BOX_SIMPLE
 from rich.text import Text
 
-from A import info, copy_to_clipboard, tr_multi
+from A import info, warning, copy_to_clipboard, tr_multi
 from A.console import console
 
 
@@ -409,13 +409,21 @@ def copy_entry_reference(
 
     Simple: copies ``#xxxxxxxx`` (8-char UUID).
     Semantika: copies ``[titolo](#xxxxxxxx)`` with disambiguation stripped.
+
+    If clipboard fails, a warning is emitted with the diagnostic reason.
     """
     uid = entry.get("uuid", "")[:8]
     if semantika:
         title = strip_title_disambiguation(entry_locale_title(entry))
-        copy_to_clipboard(f"[{title}](#{uid})")
+        ok, reason = copy_to_clipboard(f"[{title}](#{uid})")
     else:
-        copy_to_clipboard(f"#{uid}")
+        ok, reason = copy_to_clipboard(f"#{uid}")
+    if not ok:
+        warning(tr_multi(
+            "Ne povis kopii referencon al poŝo: {kialo}",
+            "Could not copy reference to clipboard: {kialo}",
+            "Impossible de copier la référence dans le presse-papier : {kialo}",
+        ).format(kialo=reason))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

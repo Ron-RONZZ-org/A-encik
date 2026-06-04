@@ -412,7 +412,13 @@ def register_commands(app: typer.Typer) -> None:
 
         if kopii or semantika_kopii:
             if kopii:
-                copy_to_clipboard(f"#{updated['uuid'][:8]}")
+                ok, reason = copy_to_clipboard(f"#{updated['uuid'][:8]}")
+                if not ok:
+                    warning(tr_multi(
+                        "Ne povis kopii UUID al poŝo: {kialo}",
+                        "Could not copy UUID to clipboard: {kialo}",
+                        "Impossible de copier l'UUID dans le presse-papier : {kialo}",
+                    ).format(kialo=reason))
             if semantika_kopii:
                 copy_entry_reference(updated, semantika=True)
 
