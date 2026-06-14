@@ -181,15 +181,13 @@ class TestEncikServiceIntegration:
         from A_encik.service import EncikService
         
         # Patch to use temp directory
-        with patch.object(storage_module, "_DATA_DIR", tmp_path):
-            with patch.object(storage_module, "_DB_FILE", tmp_path / "encik.db"):
-                with patch.object(storage_module, "_ensure_dirs", lambda: None):
-                    with patch("A.core.paths.data_dir", return_value=tmp_path):
-                        with patch("A.data.base.data_dir", return_value=tmp_path):
-                            # Use get_db() which initializes schema
-                            db = storage_module.get_db()
-                            service = EncikService(db)
-                            yield service
+        with patch.object(storage_module, "_ensure_dirs", lambda: None):
+            with patch.object(storage_module, "data_dir", return_value=tmp_path):
+                with patch("A.data.base.data_dir", return_value=tmp_path):
+                    # Use get_db() which initializes schema
+                    db = storage_module.get_db()
+                    service = EncikService(db)
+                    yield service
     
     def test_create_entry(self, service):
         """Test creating an entry."""
@@ -338,17 +336,15 @@ class TestBidirectionalLinks:
         from A_encik.service import EncikService
         from unittest.mock import patch
 
-        with patch.object(storage_module, "_DATA_DIR", tmp_path):
-            with patch.object(storage_module, "_DB_FILE", tmp_path / "encik.db"):
-                with patch.object(storage_module, "_ensure_dirs", lambda: None):
-                    with patch("A.core.paths.data_dir", return_value=tmp_path):
-                        with patch("A.data.base.data_dir", return_value=tmp_path):
-                            from A_encik.data.storage import get_db
-                            db = get_db()
-                            # Reset singleton
-                            import A_encik.service as svc_module
-                            svc_module._encik_service = None
-                            yield EncikService(db)
+        with patch.object(storage_module, "_ensure_dirs", lambda: None):
+            with patch.object(storage_module, "data_dir", return_value=tmp_path):
+                with patch("A.data.base.data_dir", return_value=tmp_path):
+                    from A_encik.data.storage import get_db
+                    db = get_db()
+                    # Reset singleton
+                    import A_encik.service as svc_module
+                    svc_module._encik_service = None
+                    yield EncikService(db)
 
     def test_reverse_link_added_on_update(self, service):
         """Test adding a ligilo entry creates a reverse link in the target."""

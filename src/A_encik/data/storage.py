@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from A.core.paths import data_dir as _data_dir, ensure_dirs as _ensure_dirs
+from A.core.paths import data_dir, ensure_dirs as _ensure_dirs
 from A.core.backup_targets import BackupTarget
 from A.data.base import (
     SQLiteDB,
@@ -18,9 +18,6 @@ from A.data.base import (
 )
 from A.data.search import FTSConfig
 from A.utils.normalize import fold_search_text
-
-_DATA_DIR: Path = _data_dir()
-_DB_FILE: Path = _DATA_DIR / "encik.db"
 
 _CREATE_ENCIK = """
 CREATE TABLE IF NOT EXISTS encik (
@@ -67,16 +64,17 @@ def _repair_if_corrupted() -> bool:
     Returns:
         True if repair was attempted, False if nothing was needed.
     """
-    if _health_check(_DB_FILE):
+    _path = data_dir() / "encik.db"
+    if _health_check(_path):
         return False
 
     # Core repair: delete WAL/SHM, VACUUM
-    if _core_repair(_DB_FILE):
+    if _core_repair(_path):
         return True
 
     # Still broken — drop and recreate semantika_cache
     try:
-        _conn = sqlite3.connect(str(_DB_FILE))
+        _conn = sqlite3.connect(str(_path))
         _conn.execute("DROP TABLE IF EXISTS semantika_cache")
         _conn.execute(
             """CREATE TABLE IF NOT EXISTS semantika_cache (
@@ -110,14 +108,15 @@ def repair_db() -> bool:
 
 
 def _backup_db() -> None:
-    backup_db(_DB_FILE)
+    backup_db(data_dir() / "encik.db")
 
 
 def _readonly_recover() -> SQLiteDB | None:
     import tempfile
+    _path = data_dir() / "encik.db"
     tmp = Path(tempfile.mktemp(suffix=".db"))
     try:
-        count = _core_readonly_recover(_DB_FILE, tmp)
+        count = _core_readonly_recover(_path, tmp)
     except Exception:
         tmp.unlink(missing_ok=True)
         return None
@@ -130,32 +129,37 @@ def _readonly_recover() -> SQLiteDB | None:
         "Recovered {n} entries...",
         "Récupéré {n} entrées...",
     ).format(n=count))
-    _bak = _DB_FILE.with_suffix(".db.dead")
+    _bak = _path.with_suffix(".db.dead")
     import shutil as _su
-    _su.move(str(_DB_FILE), str(_bak))
-    _su.move(str(tmp), str(_DB_FILE))
+    _su.move(str(_path), str(_bak))
+    _su.move(str(tmp), str(_path))
     for _sfx in ("-wal", "-shm"):
-        (_DB_FILE.parent / (_DB_FILE.name + _sfx)).unlink(missing_ok=True)
+        (_path.parent / (_path.name + _sfx)).unlink(missing_ok=True)
     _info(_tr(
         "Reakiris {n} enskribojn (malnova DB: {bak})",
         "Recovered {n} entries (old DB: {bak})",
         "Récupéré {n} entrées (ancienne DB: {bak})",
     ).format(n=count, bak=_bak.name))
-    return SQLiteDB(_DB_FILE)
+    return SQLiteDB(_path)
 
 
 _db_instance: SQLiteDB | None = None
 _repair_checked: bool = False  # Only check corruption once per process
 
 
-def get_db() -> SQLiteDB:
+def get_db(path: Path | None = None) -> SQLiteDB:
     """Get or create the shared database connection (singleton).
 
     All callers within the same process share one ``SQLiteDB`` instance,
     which uses one cached SQLite connection. This avoids WAL/SHM conflicts
     that occur when multiple connections access the same database file.
+
+    Args:
+        path: Optional explicit database path. If omitted, defaults to
+            ``data_dir() / "encik.db"`` (respects ``A_DIR`` env var).
     """
     global _db_instance, _repair_checked
+    db_path = path or data_dir() / "encik.db"
 
     # Fast path: existing healthy instance (repair checked on first access)
     if _db_instance is not None and _repair_checked:
@@ -175,7 +179,7 @@ def get_db() -> SQLiteDB:
     if _db_instance is None:
         # Backup before any DDL
         _backup_db()
-        _db_instance = SQLiteDB(_DB_FILE)
+        _db_instance = SQLiteDB(db_path)
 
     # Initialize schema and run migrations.
     # If the DB is corrupted these may fail — catch and surface a clear message.
@@ -193,9 +197,9 @@ def get_db() -> SQLiteDB:
                 _actual = {c for c in ENCIK_FTS_CONFIG.fts_columns if c in _fts_sql}
                 if _actual != _expected:
                     _db_instance.close()
-                    _db_instance = SQLiteDB(_DB_FILE)
+                    _db_instance = SQLiteDB(db_path)
         except Exception:
-            _db_instance = SQLiteDB(_DB_FILE)
+            _db_instance = SQLiteDB(db_path)
 
         _db_instance.execute(_CREATE_ENCIK)
         for stmt in _CREATE_ENCIK_INDEXES.strip().split(";"):
@@ -397,7 +401,7 @@ def get_backup_targets() -> list[BackupTarget]:
     """Return backup targets for A-encik."""
     return [
         BackupTarget(
-            path=_DB_FILE,
+            path=data_dir() / "encik.db",
             category="data",
             module="encik",
             label="Encik database",

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from A.core.testing import patch_paths
 
 from A_encik.data.storage import (
     get_db,
@@ -28,13 +29,11 @@ def temp_db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mock_data_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Mock data directory to temp path."""
-    # Import and patch after establishing the path module
+    """Redirect data directory to temp path via A_DIR."""
     import A_encik.data.storage as storage_module
-    
-    # Patch at module level
-    monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-    monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
+
+    patch_paths(monkeypatch, tmp_path)
+    storage_module._db_instance = None
 
 
 class TestRowToDict:
@@ -152,12 +151,11 @@ class TestEnsureDirs:
     def test_ensure_dirs_creates_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Test that ensure_dirs creates the data directory."""
         import A_encik.data.storage as storage_module
-        
-        # Patch module globals
-        monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-        monkeypatch.setattr(storage_module, "_ensure_dirs", lambda: None)
-        
-        # Should not raise - just call ensure_dirs
+
+        patch_paths(monkeypatch, tmp_path)
+        storage_module._db_instance = None
+
+        # ensure_dirs should create the redirected data dir
         storage_module.ensure_dirs()
 
 
@@ -167,28 +165,15 @@ class TestGetDb:
     def test_get_db_creates_tables(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Test that get_db creates required tables."""
         import A_encik.data.storage as storage_module
-        
-        # Patch module globals
-        monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-        monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
-        monkeypatch.setattr(storage_module, "_ensure_dirs", lambda: None)
-        
-        # Import after patching
-        from A.data.base import SQLiteDB
+
+        patch_paths(monkeypatch, tmp_path)
+        storage_module._db_instance = None
+
         from A.core.paths import data_dir
-        
-        # Patch data_dir globally for SQLiteDB
-        monkeypatch.setattr(
-            "A.core.paths.data_dir", 
-            lambda: tmp_path
-        )
-        monkeypatch.setattr(
-            "A.data.base.data_dir",
-            lambda: tmp_path
-        )
-        
-        # Now get_db should work
-        # Note: This will need proper A-core mocking in integration
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+
+        # Should not raise
+        db = storage_module.get_db()
 
 
 class TestBackupDb:
@@ -198,9 +183,12 @@ class TestBackupDb:
         """_backup_db() creates encik.db.bak when encik.db exists."""
         import A_encik.data.storage as storage_module
 
+        monkeypatch.setattr(storage_module, "data_dir", lambda: tmp_path)
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
+
         db_path = tmp_path / "encik.db"
         db_path.write_text("fake sqlite content")
-        monkeypatch.setattr(storage_module, "_DB_FILE", db_path)
 
         storage_module._backup_db()
 
@@ -212,10 +200,10 @@ class TestBackupDb:
         """_backup_db() silently does nothing when no DB file exists."""
         import A_encik.data.storage as storage_module
 
-        db_path = tmp_path / "encik.db"
-        monkeypatch.setattr(storage_module, "_DB_FILE", db_path)
+        monkeypatch.setattr(storage_module, "data_dir", lambda: tmp_path)
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
 
-        # Should not raise
         storage_module._backup_db()
         bak_path = tmp_path / "encik.db.bak"
         assert not bak_path.exists()
@@ -224,11 +212,14 @@ class TestBackupDb:
         """_backup_db() overwrites previous .bak file."""
         import A_encik.data.storage as storage_module
 
+        monkeypatch.setattr(storage_module, "data_dir", lambda: tmp_path)
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
+
         db_path = tmp_path / "encik.db"
         db_path.write_text("new content")
         old_bak = tmp_path / "encik.db.bak"
         old_bak.write_text("old content")
-        monkeypatch.setattr(storage_module, "_DB_FILE", db_path)
 
         storage_module._backup_db()
         assert old_bak.read_text() == "new content"
@@ -241,11 +232,9 @@ class TestRepairChecked:
         """_repair_checked is True after first get_db() call."""
         import A_encik.data.storage as storage_module
 
-        monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-        monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
-        monkeypatch.setattr(storage_module, "_ensure_dirs", lambda: None)
-        monkeypatch.setattr("A.core.paths.data_dir", lambda: tmp_path)
+        patch_paths(monkeypatch, tmp_path)
         monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
         monkeypatch.setattr(storage_module, "_repair_checked", False)
 
         db = storage_module.get_db()
@@ -255,11 +244,9 @@ class TestRepairChecked:
         """Second get_db() call returns same instance without re-checking."""
         import A_encik.data.storage as storage_module
 
-        monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-        monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
-        monkeypatch.setattr(storage_module, "_ensure_dirs", lambda: None)
-        monkeypatch.setattr("A.core.paths.data_dir", lambda: tmp_path)
+        patch_paths(monkeypatch, tmp_path)
         monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
         monkeypatch.setattr(storage_module, "_repair_checked", False)
 
         call_count = [0]
@@ -273,8 +260,8 @@ class TestRepairChecked:
         first_count = call_count[0]
         db2 = storage_module.get_db()
 
-        assert db1 is db2  # Same cached instance
-        assert call_count[0] == first_count  # Repair not called again
+        assert db1 is db2
+        assert call_count[0] == first_count
 
 
 class TestReadonlyRecover:
@@ -284,16 +271,17 @@ class TestReadonlyRecover:
         """_readonly_recover returns a valid DB instance when encik table has entries."""
         import A_encik.data.storage as storage_module
 
-        # Create a valid DB
+        monkeypatch.setattr(storage_module, "data_dir", lambda: tmp_path)
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
+
         db = sqlite3.connect(str(tmp_path / "encik.db"))
         db.execute("CREATE TABLE encik (uuid TEXT PRIMARY KEY, terminologio TEXT)")
         db.execute("INSERT INTO encik (uuid, terminologio) VALUES ('aaaaaaaa-1111-2222-3333-444444444444', '{\"eo\":\"test\"}')")
         db.commit()
         db.close()
 
-        monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
         result = storage_module._readonly_recover()
-        # Should return a new SQLiteDB with the entry recovered
         assert result is not None
         rows = result.execute("SELECT COUNT(*) AS c FROM encik")
         assert rows[0]["c"] == 1
@@ -301,6 +289,10 @@ class TestReadonlyRecover:
     def test_recover_recovers_readable_entries(self, tmp_path, monkeypatch):
         """_readonly_recover extracts entries from corrupted DB into a clean one."""
         import A_encik.data.storage as storage_module
+
+        monkeypatch.setattr(storage_module, "data_dir", lambda: tmp_path)
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
 
         db = sqlite3.connect(str(tmp_path / "encik.db"), timeout=30)
         db.execute("CREATE TABLE encik (uuid TEXT PRIMARY KEY, terminologio TEXT)")
@@ -310,9 +302,7 @@ class TestReadonlyRecover:
         db.commit()
         db.close()
 
-        monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
         result = storage_module._readonly_recover()
-
         if result is not None:
             rows = result.execute("SELECT COUNT(*) AS c FROM encik")
             assert rows[0]["c"] == 2
@@ -321,11 +311,13 @@ class TestReadonlyRecover:
         """_readonly_recover returns None when even read-only access fails."""
         import A_encik.data.storage as storage_module
 
+        monkeypatch.setattr(storage_module, "data_dir", lambda: tmp_path)
+        monkeypatch.setattr("A.data.base.data_dir", lambda: tmp_path)
+        storage_module._db_instance = None
+
         db_path = tmp_path / "encik.db"
-        # Write garbage (not a SQLite DB at all)
         db_path.write_bytes(b'\x00' * 512)
 
-        monkeypatch.setattr(storage_module, "_DB_FILE", db_path)
         result = storage_module._readonly_recover()
         assert result is None
 
