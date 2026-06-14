@@ -13,14 +13,6 @@ from typer.testing import CliRunner
 from A_encik.cli import app
 
 
-@pytest.fixture(autouse=True)
-def isolate_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Isolate database to tmp_path to prevent leaking test data."""
-    import A_encik.data.storage as storage_module
-    monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-    monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "encik.db")
-
-
 @pytest.fixture
 def runner():
     """Create CLI test runner."""
