@@ -27,7 +27,7 @@ def register_commands(app: typer.Typer) -> None:
         profundeco: int = typer.Option(
             3,
             "-d",
-            "--depth",
+            "--profundo",
             help=tr_multi("Maksimuma profundeco", "Maximum depth", "Profondeur maximale"),
         ),
     ) -> None:
@@ -90,7 +90,7 @@ def register_commands(app: typer.Typer) -> None:
         ),
         revert_newlines: bool = typer.Option(
             False,
-            "--revert-newlines",
+            "--malfari-liniojn",
             hidden=True,
             help=tr_multi(
                 "Malfari difekton de \\n (por retro-ĝisdatigo)",
@@ -158,7 +158,7 @@ def register_commands(app: typer.Typer) -> None:
         ),
         formato: str = typer.Option(
             "enc",
-            "--format",
+            "--formato",
             "-f",
             help=tr_multi("Formato: enc aŭ json", "Format: enc or json", "Format: enc ou json"),
         ),
@@ -271,7 +271,7 @@ def register_commands(app: typer.Typer) -> None:
         ),
         verbose: bool = typer.Option(
             False,
-            "--verbose",
+            "--detala",
             "-v",
             help=tr_multi(
                 "Montri la plenan konversacion kun LLM",

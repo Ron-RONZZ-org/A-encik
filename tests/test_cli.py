@@ -155,7 +155,7 @@ class TestAldoniCommand:
     
     def test_aldoni_jaro_bce(self, runner):
         """Test aldoni with --jaro --bce creates BCE year entry."""
-        result = runner.invoke(app, ["aldoni", "--jaro", "44", "--bce"])
+        result = runner.invoke(app, ["aldoni", "--jaro", "44", "--antau-kristo"])
         
         assert result.exit_code == 0
         assert "UUID:" in result.output
