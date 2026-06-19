@@ -106,7 +106,7 @@ def register_commands(app: typer.Typer) -> None:
         ),
         bce: bool = typer.Option(
             False,
-            "--bce",
+            "--antau-kristo",
             help=tr_multi(
                 "Antaŭ Kristo (a.K.E.)",
                 "BCE / Before Common Era",

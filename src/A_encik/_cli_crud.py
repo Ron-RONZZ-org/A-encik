@@ -123,7 +123,7 @@ def register_commands(app: typer.Typer) -> None:
         open_browser: bool = typer.Option(
             False,
             "-o",
-            "--open",
+            "--malfermi",
             help=tr_multi("Malfermi en retumilo", "Open in browser", "Ouvrir dans le navigateur"),
         ),
         kopii: bool = typer.Option(
@@ -442,7 +442,7 @@ def register_commands(app: typer.Typer) -> None:
         )],
         hard: bool = typer.Option(
             False,
-            "--hard",
+            "--permanenta",
             "-H",
             help=tr_multi("Forigi permanente (preterrubujo)", "Permanent delete (no trash)", "Suppression définitive (pas de corbeille)"),
         ),

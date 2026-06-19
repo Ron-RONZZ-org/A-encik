@@ -317,7 +317,7 @@ def semantika_ligilo_modifi(
         None, "-a", "--aliazoj", help=tr_multi("Novaj aliasoj (CSV)", "New aliases (CSV)", "Nouveaux alias (CSV)"),
     ),
     refetch: bool = typer.Option(
-        False, "--refetch", "-r", help=tr_multi("Refetch metadata from Wikidata", "Re-fetch metadata from Wikidata", "Re-rechercher les métadonnées Wikidata"),
+        False, "--repreni", "-r", help=tr_multi("Refetch metadata from Wikidata", "Re-fetch metadata from Wikidata", "Re-rechercher les métadonnées Wikidata"),
     ),
     lingvo: Optional[str] = typer.Option(
         None, "-l", "--lingvo", help=tr_multi("Lingvokodoj por refetch (ex: eo,en)", "Language codes for refetch (e.g. eo,en)", "Codes de langue pour refetch (ex: eo,en)"),
